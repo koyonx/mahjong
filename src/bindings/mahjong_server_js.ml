@@ -36,8 +36,24 @@ let tile_to_json (tile : Tile.tile) : string =
     json_obj [("kind", json_str "jihai"); ("suit", json_str suit_str);
               ("number", json_int number); ("label", json_str (Tile.to_string tile))]
 
+let yaku_id_of (y : Yaku.yaku) : string =
+  match y with
+  | Yaku.Riichi -> "riichi" | Yaku.Ippatsu -> "ippatsu" | Yaku.Tsumo -> "tsumo"
+  | Yaku.Tanyao -> "tanyao" | Yaku.Pinfu -> "pinfu" | Yaku.Iipeiko -> "iipeiko"
+  | Yaku.Yakuhai _ -> "yakuhai" | Yaku.Chanta -> "chanta" | Yaku.Ittsu -> "ittsu"
+  | Yaku.Sanshoku_doujun -> "sanshoku_doujun" | Yaku.Sanshoku_doukou -> "sanshoku_doukou"
+  | Yaku.Toitoi -> "toitoi" | Yaku.Sanankou -> "sanankou" | Yaku.Honroutou -> "honroutou"
+  | Yaku.Shousangen -> "shousangen" | Yaku.Chiitoitsu -> "chiitoitsu"
+  | Yaku.Honitsu -> "honitsu" | Yaku.Junchan -> "junchan"
+  | Yaku.Ryanpeiko -> "ryanpeiko" | Yaku.Chinitsu -> "chinitsu"
+  | Yaku.Kokushi -> "kokushi" | Yaku.Suuankou -> "suuankou"
+  | Yaku.Daisangen -> "daisangen" | Yaku.Shousuushii -> "shousuushii"
+  | Yaku.Daisuushii -> "daisuushii" | Yaku.Tsuuiisou -> "tsuuiisou"
+  | Yaku.Ryuuiisou -> "ryuuiisou" | Yaku.Chinroutou -> "chinroutou"
+  | Yaku.Chuuren -> "chuuren" | Yaku.Tenhou -> "tenhou" | Yaku.Chiihou -> "chiihou"
+
 let yaku_to_json (y : Yaku.yaku) : string =
-  json_obj [("name", json_str (Yaku.name_of_yaku y)); ("han", json_int (Yaku.han_of_yaku y))]
+  json_obj [("id", json_str (yaku_id_of y)); ("han", json_int (Yaku.han_of_yaku y))]
 
 let payment_to_json (p : Scoring.payment) : string =
   match p with

@@ -46,8 +46,26 @@ export interface GameState {
 }
 
 export interface Yaku {
-  name: string;
+  id: string;
   han: number;
+}
+
+const yakuNames: Record<string, string> = {
+  riichi: 'リーチ', ippatsu: '一発', tsumo: '門前清自摸和',
+  tanyao: '断么九', pinfu: '平和', iipeiko: '一盃口',
+  yakuhai: '役牌', chanta: '混全帯么九', ittsu: '一気通貫',
+  sanshoku_doujun: '三色同順', sanshoku_doukou: '三色同刻',
+  toitoi: '対々和', sanankou: '三暗刻', honroutou: '混老頭',
+  shousangen: '小三元', chiitoitsu: '七対子',
+  honitsu: '混一色', junchan: '純全帯么九', ryanpeiko: '二盃口',
+  chinitsu: '清一色', kokushi: '国士無双', suuankou: '四暗刻',
+  daisangen: '大三元', shousuushii: '小四喜', daisuushii: '大四喜',
+  tsuuiisou: '字一色', ryuuiisou: '緑一色', chinroutou: '清老頭',
+  chuuren: '九蓮宝燈', tenhou: '天和', chiihou: '地和',
+};
+
+export function yakuName(id: string): string {
+  return yakuNames[id] ?? id;
 }
 
 export interface Payment {

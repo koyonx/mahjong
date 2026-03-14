@@ -1,4 +1,5 @@
 import type { AgariResult } from '../mahjong-bridge';
+import { yakuName } from '../mahjong-bridge';
 
 interface AgariDialogProps {
   result: AgariResult;
@@ -30,7 +31,7 @@ export function AgariDialog({ result, winnerName, onClose }: AgariDialogProps) {
         <div className="space-y-2 mb-6">
           {result.yakus.map((yaku, i) => (
             <div key={i} className="flex justify-between px-4 py-1 bg-green-900/50 rounded">
-              <span>{yaku.name}</span>
+              <span>{yakuName(yaku.id)}</span>
               <span className="text-amber-300">{yaku.han}翻</span>
             </div>
           ))}
