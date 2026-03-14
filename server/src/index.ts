@@ -115,6 +115,9 @@ function handleMessage(ws: WebSocket, msg: { type: string; [key: string]: unknow
     case 'skip_call':
       handleSkipCall(ws);
       break;
+    case 'leave_room':
+      handleLeaveRoom(ws);
+      break;
     default:
       sendError(ws, `不明なメッセージタイプ: ${msg.type}`);
   }
@@ -281,6 +284,25 @@ function handleRon(ws: WebSocket): void {
       processAiTurns(room);
     }
   }, 3000);
+}
+
+function handleLeaveRoom(ws: WebSocket): void {
+  const room = getRoomBySocket(ws);
+  if (!room) return;
+
+  const player = room.players.find(p => p.ws === ws);
+  const name = player?.name ?? '';
+
+  removePlayer(ws);
+  sendJson(ws, { type: 'room_left' });
+
+  if (room.players.length > 0) {
+    broadcastPlayerList(room);
+    broadcastToRoom(room, () => JSON.stringify({
+      type: 'message',
+      text: `${name} が退出しました`,
+    }));
+  }
 }
 
 function handleSkipCall(_ws: WebSocket): void {

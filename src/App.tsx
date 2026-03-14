@@ -53,6 +53,7 @@ function MultiplayerApp() {
         onCreateRoom={mp.createRoom}
         onJoinRoom={mp.joinRoom}
         onStartGame={mp.startGame}
+        onLeaveRoom={mp.leaveRoom}
       />
     );
   }

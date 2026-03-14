@@ -156,6 +156,22 @@ export function useMultiplayer() {
     setState(s => ({ ...s, agariResult: null }));
   }, []);
 
+  const leaveRoom = useCallback(() => {
+    send({ type: 'leave_room' });
+    setState(s => ({
+      ...s,
+      roomId: null,
+      seat: -1,
+      players: [],
+      gameState: null,
+      agariResult: null,
+      turnInfo: null,
+      messages: [],
+      error: null,
+      gameEnd: null,
+    }));
+  }, [send]);
+
   return {
     ...state,
     createRoom,
@@ -165,5 +181,6 @@ export function useMultiplayer() {
     tsumo,
     riichi,
     clearAgari,
+    leaveRoom,
   };
 }
