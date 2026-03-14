@@ -135,9 +135,14 @@ let suit_of_tile = function
 type agari_context = {
   is_tsumo : bool;        (** ツモ和了か *)
   is_riichi : bool;       (** リーチしているか *)
+  is_double_riichi : bool;(** ダブルリーチか *)
   is_ippatsu : bool;      (** 一発か *)
   is_tenhou : bool;       (** 天和か *)
   is_chiihou : bool;      (** 地和か *)
+  is_menzen : bool;       (** 門前か *)
+  is_haitei : bool;       (** 海底ツモか *)
+  is_houtei : bool;       (** 河底ロンか *)
+  dora_count : int;       (** ドラ枚数 *)
   bakaze : Tile.jihai;    (** 場風 *)
   jikaze : Tile.jihai;    (** 自風 *)
 }
@@ -145,9 +150,14 @@ type agari_context = {
 let default_context = {
   is_tsumo = false;
   is_riichi = false;
+  is_double_riichi = false;
   is_ippatsu = false;
   is_tenhou = false;
   is_chiihou = false;
+  is_menzen = true;
+  is_haitei = false;
+  is_houtei = false;
+  dora_count = 0;
   bakaze = Tile.Ton;
   jikaze = Tile.Ton;
 }
@@ -409,6 +419,16 @@ let check_junchan (pattern : Mentsu.agari_pattern) : bool =
   in
   List.for_all mentsu_has_routou pattern.mentsu_list && jantai_routou && no_jihai
 
+(** 食い下がりの翻数（鳴き時に1翻下がる役） *)
+let han_of_yaku_open = function
+  | Chanta -> 1
+  | Ittsu -> 1
+  | Sanshoku_doujun -> 1
+  | Honitsu -> 2
+  | Junchan -> 2
+  | Chinitsu -> 5
+  | y -> han_of_yaku y  (* 変化なし *)
+
 (** 和了パターンから成立する役を全て判定する *)
 let judge_yaku (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku list =
   let yakus = ref [] in
@@ -426,15 +446,18 @@ let judge_yaku (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku lis
   if !yakus <> [] then !yakus
   else begin
     (* 状況役 *)
-    if ctx.is_riichi then add Riichi;
+    if ctx.is_double_riichi then add Riichi;  (* ダブリー: 2翻として扱う（Riichi + 追加1翻は後で加算） *)
+    if ctx.is_riichi && not ctx.is_double_riichi then add Riichi;
     if ctx.is_ippatsu then add Ippatsu;
-    if ctx.is_tsumo then add Tsumo;
+    if ctx.is_tsumo && ctx.is_menzen then add Tsumo;
     if ctx.is_tenhou then add Tenhou;
     if ctx.is_chiihou then add Chiihou;
+    if ctx.is_haitei then add Tsumo;  (* 海底ツモ: 1翻追加 *)
+    if ctx.is_houtei then add Tsumo;  (* 河底ロン: 1翻追加 *)
 
-    (* 手役 *)
+    (* 手役: 門前限定の役は鳴いていたら付かない *)
     if check_tanyao pattern then add Tanyao;
-    if check_pinfu pattern ctx then add Pinfu;
+    if ctx.is_menzen && check_pinfu pattern ctx then add Pinfu;
     if check_toitoi pattern then add Toitoi;
     if check_sanankou pattern then add Sanankou;
     if check_honroutou pattern then add Honroutou;
@@ -446,8 +469,10 @@ let judge_yaku (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku lis
     if check_sanshoku_doukou pattern then add Sanshoku_doukou;
     if check_chanta pattern then add Chanta;
     if check_junchan pattern then add Junchan;
-    if check_ryanpeiko pattern then add Ryanpeiko
-    else if check_iipeiko pattern then add Iipeiko;
+    if ctx.is_menzen then begin
+      if check_ryanpeiko pattern then add Ryanpeiko
+      else if check_iipeiko pattern then add Iipeiko
+    end;
 
     (* 役牌 *)
     let yh = check_yakuhai pattern ctx in
@@ -455,6 +480,13 @@ let judge_yaku (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku lis
 
     !yakus
   end
+
+(** 翻数を計算（食い下がり対応） *)
+let calc_han (yakus : yaku list) (is_menzen : bool) : int =
+  let base = List.fold_left (fun acc y ->
+    acc + (if is_menzen then han_of_yaku y else han_of_yaku_open y)
+  ) 0 yakus in
+  base
 
 (** 全手牌から最も高い役の組み合わせを判定 *)
 let judge (tiles : Tile.tile list) (ctx : agari_context) : (yaku list * int) option =
@@ -467,19 +499,27 @@ let judge (tiles : Tile.tile list) (ctx : agari_context) : (yaku list * int) opt
   let patterns = Mentsu.find_agari_patterns tiles in
   let normal_results = List.map (fun p ->
     let yakus = judge_yaku p ctx in
-    let han = List.fold_left (fun acc y -> acc + han_of_yaku y) 0 yakus in
+    let han = calc_han yakus ctx.is_menzen in
+    (* ダブルリーチ: +1翻追加 *)
+    let han = if ctx.is_double_riichi then han + 1 else han in
     (yakus, han)
   ) patterns in
 
   let special_results = List.map (fun yakus ->
-    let han = List.fold_left (fun acc y -> acc + han_of_yaku y) 0 yakus in
+    let han = calc_han yakus ctx.is_menzen in
+    let han = if ctx.is_double_riichi then han + 1 else han in
     (yakus, han)
   ) [!special_yakus] in
 
   let all_results = List.filter (fun (yakus, _) -> yakus <> []) (normal_results @ special_results) in
 
+  (* ドラ加算 *)
+  let add_dora (yakus, han) = (yakus, han + ctx.dora_count) in
+
   match all_results with
   | [] -> None
-  | _ -> Some (List.fold_left (fun best (y, h) ->
+  | _ ->
+    let best = List.fold_left (fun best (y, h) ->
       match best with (_, bh) -> if h > bh then (y, h) else best
-    ) (List.hd all_results) all_results)
+    ) (List.hd all_results) all_results in
+    Some (add_dora best)

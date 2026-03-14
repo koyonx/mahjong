@@ -57,3 +57,11 @@ let dora_of_indicator (indicator : Tile.tile) : Tile.tile =
   | Tile.Jihai Tile.Chun -> Tile.Jihai Tile.Haku
   | Tile.Jihai Tile.Haku -> Tile.Jihai Tile.Hatsu
   | Tile.Jihai Tile.Hatsu -> Tile.Jihai Tile.Chun
+
+(** 手牌中のドラ枚数をカウント *)
+let count_dora (wall : t) (kan_count : int) (tiles : Tile.tile list) : int =
+  let indicators = dora_indicators wall kan_count in
+  let doras = List.map dora_of_indicator indicators in
+  List.fold_left (fun acc tile ->
+    acc + List.length (List.filter (fun d -> Tile.compare d tile = 0) doras)
+  ) 0 tiles

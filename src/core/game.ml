@@ -127,19 +127,37 @@ let advance_turn (game : round) : round =
   let next = (game.current_turn + 1) mod 4 in
   { game with current_turn = next; phase = WaitingDraw }
 
+(** 振聴チェック: 捨て牌にある牌でロンできない *)
+let is_furiten (player : Player.t) (tile : Tile.tile) : bool =
+  (* 自分の河に同じ牌があれば振聴 *)
+  List.exists (fun t -> Tile.compare t tile = 0) player.kawa
+
+(** 海底かどうか（残り0枚） *)
+let is_haitei (game : round) : bool =
+  Wall.remaining game.wall = 0
+
 (** ロン和了の処理 *)
 let ron (game : round) (winner : int) : (round, string) result =
   match game.last_discard with
   | None -> Error "ロンできる捨て牌がありません"
   | Some tile ->
     let player = game.players.(winner) in
+    (* 振聴チェック *)
+    if is_furiten player tile then Error "振聴のためロンできません"
+    else
     let tiles = tile :: player.hand.tiles in
+    let dora_count = Wall.count_dora game.wall 0 tiles in
     let ctx = {
       Yaku.is_tsumo = false;
       is_riichi = player.is_riichi;
+      is_double_riichi = false;
       is_ippatsu = player.is_ippatsu;
       is_tenhou = false;
       is_chiihou = false;
+      is_menzen = Player.is_menzen player;
+      is_haitei = false;
+      is_houtei = is_haitei game;
+      dora_count;
       bakaze = game.bakaze;
       jikaze = player.jikaze;
     } in
@@ -158,12 +176,18 @@ let ron (game : round) (winner : int) : (round, string) result =
 (** ツモ和了の処理 *)
 let tsumo_agari (game : round) : (round, string) result =
   let player = game.players.(game.current_turn) in
+  let dora_count = Wall.count_dora game.wall 0 player.hand.tiles in
   let ctx = {
     Yaku.is_tsumo = true;
     is_riichi = player.is_riichi;
+    is_double_riichi = false;
     is_ippatsu = player.is_ippatsu;
     is_tenhou = false;
     is_chiihou = false;
+    is_menzen = Player.is_menzen player;
+    is_haitei = is_haitei game;
+    is_houtei = false;
+    dora_count;
     bakaze = game.bakaze;
     jikaze = player.jikaze;
   } in
@@ -203,10 +227,43 @@ let declare_riichi (game : round) : (round, string) result =
     Ok { game with players; riichi_sticks = game.riichi_sticks + 1 }
   | Error e -> Error e
 
+(** テンパイ判定 *)
+let is_tenpai (player : Player.t) : bool =
+  List.length player.hand.tiles = 13 &&
+  Hand.tenpai_tiles player.hand <> []
+
+(** 流局時のテンパイ/ノーテン精算 *)
+let ryuukyoku_payments (game : round) : round =
+  let players = Array.copy game.players in
+  let tenpai_count = Array.fold_left (fun acc (p : Player.t) ->
+    if is_tenpai p then acc + 1 else acc
+  ) 0 players in
+  if tenpai_count > 0 && tenpai_count < 4 then begin
+    (* テンパイ者が受け取る合計3000点をノーテン者が払う *)
+    let pay_per_noten = 3000 / (4 - tenpai_count) in
+    let recv_per_tenpai = 3000 / tenpai_count in
+    Array.iteri (fun i (p : Player.t) ->
+      if is_tenpai p then
+        players.(i) <- Player.add_score recv_per_tenpai p
+      else
+        players.(i) <- Player.add_score (-pay_per_noten) p
+    ) players
+  end;
+  { game with players }
+
 (** 次の局に進む *)
 let next_round (game : round) (oya_won : bool) : round =
+  (* 流局時はテンパイ精算を実行 *)
+  let game =
+    if game.phase = RoundEnd && not oya_won then
+      ryuukyoku_payments game
+    else game
+  in
   let scores = Array.map (fun (p : Player.t) -> p.score) game.players in
-  if oya_won then
+  (* 親がテンパイなら連荘 *)
+  let oya_seat = (game.kyoku - 1) mod 4 in
+  let oya_tenpai = is_tenpai game.players.(oya_seat) in
+  if oya_won || oya_tenpai then
     (* 親の連荘 *)
     new_round game.bakaze game.kyoku (game.honba + 1) game.riichi_sticks scores
   else
@@ -216,7 +273,6 @@ let next_round (game : round) (oya_won : bool) : round =
       | Tile.Ton ->
         new_round Tile.Nan 1 0 game.riichi_sticks scores
       | _ ->
-        (* 南4局終了 → ゲーム終了（簡略化） *)
         { game with phase = GameEnd }
     else
       new_round game.bakaze next_kyoku 0 game.riichi_sticks scores

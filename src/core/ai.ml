@@ -121,9 +121,14 @@ let decide (player : Player.t) (bakaze : Tile.jihai) : action =
   let ctx = {
     Yaku.is_tsumo = true;
     is_riichi = player.is_riichi;
+    is_double_riichi = false;
     is_ippatsu = player.is_ippatsu;
     is_tenhou = false;
     is_chiihou = false;
+    is_menzen = Player.is_menzen player;
+    is_haitei = false;
+    is_houtei = false;
+    dora_count = 0;
     bakaze;
     jikaze = player.jikaze;
   } in
