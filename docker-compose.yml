@@ -1,0 +1,7 @@
+services:
+  ocaml:
+    build: .
+    volumes:
+      - ./src/core:/home/opam/app/src/core
+      - ./dune-project:/home/opam/app/dune-project
+    command: dune build --watch
