@@ -23,21 +23,31 @@ export function PlayerHand({
 }: PlayerHandProps) {
   return (
     <div>
-      <div className={`flex items-center gap-2 mb-1 ${compact ? 'text-xs' : 'text-sm'}`}>
-        <span className={`font-bold ${isCurrentTurn ? 'text-yellow-400' : 'text-green-300'}`}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
+        fontSize: compact ? 11 : 13,
+      }}>
+        <span style={{
+          fontWeight: 700,
+          color: isCurrentTurn ? '#e8c44a' : '#6a8a6a',
+        }}>
           {kazeToJa(player.jikaze)}
         </span>
         {player.is_riichi && (
-          <span className="px-1.5 py-0.5 bg-red-600 text-white text-[10px] rounded font-bold">
-            立直
-          </span>
+          <span style={{
+            padding: '1px 5px', background: '#c41e3a', color: '#fff',
+            fontSize: 10, borderRadius: 3, fontWeight: 700,
+          }}>立直</span>
         )}
-        <span className="text-amber-300 font-mono font-bold ml-auto">
-          {player.score.toLocaleString()}
-        </span>
+        {isHuman && (
+          <span style={{
+            padding: '1px 5px', background: '#2a5a8a', color: '#fff',
+            fontSize: 10, borderRadius: 3,
+          }}>YOU</span>
+        )}
       </div>
 
-      <div className="flex gap-0.5 flex-wrap justify-center">
+      <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
         {player.hand ? (
           player.hand.map((tile, i) => (
             <TileView

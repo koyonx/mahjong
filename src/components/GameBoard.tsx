@@ -7,7 +7,7 @@ import {
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
-import { GameInfo } from './GameInfo';
+import { CenterPanel } from './CenterPanel';
 import { AgariDialog } from './AgariDialog';
 import { TileView } from './TileView';
 
@@ -32,15 +32,13 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setAgariResult(null);
     setTenpaiTiles([]);
     setMessage('ゲーム開始！');
-
     setTimeout(() => {
       const drawn = drawTile();
       if (drawn) {
         setState(drawn);
         if (drawn.current_turn === HUMAN_SEAT) {
           setMessage('牌を選んで捨ててください');
-          const waits = getTenpaiTiles();
-          setTenpaiTiles(waits);
+          setTenpaiTiles(getTenpaiTiles());
         }
       }
     }, 300);
@@ -49,15 +47,12 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const handleDiscard = useCallback((tile: Tile) => {
     if (!state || state.phase !== 'waiting_discard') return;
     if (state.current_turn !== HUMAN_SEAT) return;
-
     const newState = discardTile(tile);
     if (!newState) return;
-
     setState(newState);
     setSelectedTile(null);
     setTenpaiTiles([]);
     setMessage('');
-
     setTimeout(() => processAfterDiscard(newState), 300);
   }, [state]);
 
@@ -72,44 +67,30 @@ export function GameBoard({ onBack }: GameBoardProps) {
         return;
       }
     }
-
     const advanced = advanceTurn();
     if (!advanced) return;
-
     processTurn(advanced);
   }, []);
 
   const processTurn = useCallback((currentState: GameState) => {
     setState(currentState);
-
     if (currentState.phase === 'round_end' || currentState.phase === 'game_end') {
       setMessage(currentState.phase === 'game_end' ? 'ゲーム終了' : '流局');
       return;
     }
-
     const drawn = drawTile();
-    if (!drawn) {
-      setMessage('流局');
-      return;
-    }
+    if (!drawn) { setMessage('流局'); return; }
     setState(drawn);
-
     if (drawn.current_turn === HUMAN_SEAT) {
       setMessage('牌を選んで捨ててください');
-      const waits = getTenpaiTiles();
-      setTenpaiTiles(waits);
-
+      setTenpaiTiles(getTenpaiTiles());
       const tsumoResult = checkTsumoAgari();
-      if (tsumoResult) {
-        setMessage('ツモ和了できます！');
-      }
+      if (tsumoResult) setMessage('ツモ和了できます！');
     } else {
       setMessage(`${kazeToJa(drawn.players[drawn.current_turn].jikaze)}家の番...`);
-
       setTimeout(() => {
         const aiAction = aiDecide(drawn.current_turn);
         if (!aiAction) return;
-
         if (aiAction.action === 'tsumo') {
           const tsumoResult = checkTsumoAgari();
           if (tsumoResult) {
@@ -119,12 +100,10 @@ export function GameBoard({ onBack }: GameBoardProps) {
             return;
           }
         }
-
         if (aiAction.action === 'riichi') {
           const riichiState = declareRiichi();
           if (riichiState) setState(riichiState);
         }
-
         if (aiAction.tile) {
           const afterDiscard = discardTile(aiAction.tile);
           if (afterDiscard) {
@@ -172,84 +151,78 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
   if (!state) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-8">
-        <h1 className="text-5xl font-bold text-amber-300">麻雀</h1>
-        <p className="text-green-300">日本式リーチ麻雀</p>
-        <button
-          onClick={handleStart}
-          className="px-8 py-4 bg-yellow-500 hover:bg-yellow-400 text-green-950 text-xl font-bold rounded-xl transition shadow-lg"
-        >
-          ゲーム開始
-        </button>
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100vh', gap: 32, background: '#0d1a0f',
+      }}>
+        <h1 style={{ fontSize: 48, fontWeight: 700, color: '#e8c44a' }}>麻雀</h1>
+        <p style={{ color: '#6a8a6a' }}>日本式リーチ麻雀</p>
+        <button onClick={handleStart} style={{
+          padding: '16px 32px', background: '#e8c44a', border: 'none', borderRadius: 12,
+          color: '#1a1a0a', fontSize: 20, fontWeight: 700, cursor: 'pointer',
+        }}>ゲーム開始</button>
         {onBack && (
-          <button onClick={onBack} className="text-green-400 hover:text-green-300 text-sm">
-            戻る
-          </button>
+          <button onClick={onBack} style={{
+            color: '#6a8a6a', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14,
+          }}>戻る</button>
         )}
       </div>
     );
   }
 
-  const topSeat = 2;
-  const rightSeat = 3;
-  const leftSeat = 1;
-
-  const canTsumo = state.phase === 'waiting_discard'
-    && state.current_turn === HUMAN_SEAT
-    && checkTsumoAgari() !== null;
+  const topSeat = 2, rightSeat = 3, leftSeat = 1;
+  const canTsumo = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT && checkTsumoAgari() !== null;
 
   return (
-    <div className="relative flex flex-col h-screen overflow-hidden" style={{ background: 'radial-gradient(ellipse at center, #1a4a2e 0%, #0d2818 100%)' }}>
-      {/* 戻るボタン */}
+    <div style={{
+      width: '100vw', height: '100vh', overflow: 'hidden',
+      background: 'linear-gradient(180deg, #3a2a1a 0%, #1a2a1a 30%, #0a1a0e 100%)',
+      display: 'flex', flexDirection: 'column', position: 'relative',
+    }}>
       {onBack && (
-        <button
-          onClick={onBack}
-          className="absolute top-3 right-3 z-30 w-8 h-8 flex items-center justify-center bg-green-800/60 hover:bg-green-700/80 rounded text-green-300 text-lg transition"
-        >
-          ✕
-        </button>
+        <button onClick={onBack} style={{
+          position: 'absolute', top: 8, right: 8, zIndex: 30,
+          width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.4)', border: '1px solid #555', borderRadius: 4,
+          color: '#aaa', fontSize: 16, cursor: 'pointer',
+        }}>✕</button>
       )}
 
-      {/* 局情報 */}
-      <div className="flex-none p-2">
-        <GameInfo state={state} />
-        {message && (
-          <div className="text-center py-1 text-green-200 text-xs">{message}</div>
-        )}
-      </div>
+      {message && (
+        <div style={{ textAlign: 'center', padding: '4px 0', color: '#8a8', fontSize: 12, flexShrink: 0 }}>
+          {message}
+        </div>
+      )}
 
-      {/* 卓面 */}
-      <div className="flex-1 relative">
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         {/* 対面 */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-10">
+        <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
           <PlayerHand player={state.players[topSeat]} isCurrentTurn={state.current_turn === topSeat} isHuman={false} compact />
           <Kawa tiles={state.players[topSeat].kawa} compact />
         </div>
 
         {/* 左 */}
-        <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10">
+        <div style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
           <PlayerHand player={state.players[leftSeat]} isCurrentTurn={state.current_turn === leftSeat} isHuman={false} compact />
           <Kawa tiles={state.players[leftSeat].kawa} compact />
         </div>
 
         {/* 右 */}
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-10">
+        <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
           <PlayerHand player={state.players[rightSeat]} isCurrentTurn={state.current_turn === rightSeat} isHuman={false} compact />
           <Kawa tiles={state.players[rightSeat].kawa} compact />
         </div>
 
-        {/* 中央 */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded border border-green-600/30 flex items-center justify-center">
-          <div className="text-green-400/40 text-2xl font-bold">
-            {kazeToJa(state.bakaze)}{state.kyoku}
-          </div>
+        {/* 中央パネル */}
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+          <CenterPanel state={state} mySeat={HUMAN_SEAT} />
         </div>
       </div>
 
       {/* 自分 */}
-      <div className="flex-none p-3 bg-green-950/40">
+      <div style={{ flexShrink: 0, padding: '8px 16px 12px', background: 'linear-gradient(0deg, rgba(0,0,0,0.4), transparent)' }}>
         <Kawa tiles={state.players[HUMAN_SEAT].kawa} />
-        <div className="mt-2">
+        <div style={{ marginTop: 8 }}>
           <PlayerHand
             player={state.players[HUMAN_SEAT]}
             isCurrentTurn={state.current_turn === HUMAN_SEAT}
@@ -259,31 +232,24 @@ export function GameBoard({ onBack }: GameBoardProps) {
             onSelectTile={setSelectedTile}
           />
         </div>
-
         {tenpaiTiles.length > 0 && (
-          <div className="mt-2 flex items-center justify-center gap-2">
-            <span className="text-xs text-green-300">待ち:</span>
-            {tenpaiTiles.map((t, i) => (
-              <TileView key={i} tile={t} small />
-            ))}
+          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#8a8' }}>待ち:</span>
+            {tenpaiTiles.map((t, i) => <TileView key={i} tile={t} small />)}
           </div>
         )}
-
         {canTsumo && (
-          <div className="flex justify-center mt-2">
-            <button
-              onClick={handleTsumo}
-              className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition shadow-lg"
-            >
-              ツモ
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+            <button onClick={handleTsumo} style={{
+              padding: '8px 24px', background: '#c41e3a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
+            }}>ツモ</button>
           </div>
         )}
       </div>
 
-      {agariResult && (
-        <AgariDialog result={agariResult} winnerName={agariWinner} onClose={handleAgariClose} />
-      )}
+      {agariResult && <AgariDialog result={agariResult} winnerName={agariWinner} onClose={handleAgariClose} />}
     </div>
   );
 }
