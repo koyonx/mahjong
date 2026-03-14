@@ -3,5 +3,7 @@ services:
     build: .
     volumes:
       - ./src/core:/home/opam/app/src/core
+      - ./src/bindings:/home/opam/app/src/bindings
+      - ./test:/home/opam/app/test
       - ./dune-project:/home/opam/app/dune-project
     command: dune build --watch
