@@ -44,24 +44,30 @@ export function PlayerHand({
       </div>
 
       <div className="flex gap-1 flex-wrap justify-center">
-        {player.hand.map((tile, i) => (
-          <TileView
-            key={i}
-            tile={tile}
-            faceDown={!isHuman}
-            selected={isHuman && selectedTile === i}
-            onClick={isHuman && isCurrentTurn && onSelectTile
-              ? () => {
-                  if (selectedTile === i && onDiscard) {
-                    onDiscard(tile);
-                  } else {
-                    onSelectTile(i);
+        {player.hand ? (
+          player.hand.map((tile, i) => (
+            <TileView
+              key={i}
+              tile={tile}
+              faceDown={!isHuman}
+              selected={isHuman && selectedTile === i}
+              onClick={isHuman && isCurrentTurn && onSelectTile
+                ? () => {
+                    if (selectedTile === i && onDiscard) {
+                      onDiscard(tile);
+                    } else {
+                      onSelectTile(i);
+                    }
                   }
-                }
-              : undefined
-            }
-          />
-        ))}
+                : undefined
+              }
+            />
+          ))
+        ) : (
+          Array.from({ length: player.hand_count ?? 13 }, (_, i) => (
+            <TileView key={i} tile={{ kind: 'jihai', suit: 'kaze', number: 1, label: '' }} faceDown />
+          ))
+        )}
       </div>
     </div>
   );

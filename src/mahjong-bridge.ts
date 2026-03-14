@@ -13,7 +13,8 @@ export interface Tile {
 }
 
 export interface Player {
-  hand: Tile[];
+  hand: Tile[] | null;
+  hand_count: number;
   kawa: Tile[];
   score: number;
   is_riichi: boolean;
