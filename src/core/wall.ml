@@ -16,6 +16,9 @@ let shuffle arr =
     arr.(j) <- tmp
   done
 
+(** 初回のみ乱数を初期化 *)
+let _init = Random.self_init ()
+
 (** 山を作成（シャッフル済み） *)
 let create () : t =
   let tiles = Array.of_list Tile.all_tiles in
