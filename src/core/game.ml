@@ -87,9 +87,17 @@ let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int
     last_discard_player = None;
   }
 
-(** ゲーム開始（東1局から） *)
+(** ゲーム開始（席順ランダム、東1局から） *)
 let start () : round =
-  new_round Tile.Ton 1 0 0 [|25000; 25000; 25000; 25000|]
+  let offset = Random.int 4 in
+  let round = new_round Tile.Ton 1 0 0 [|25000; 25000; 25000; 25000|] in
+  (* offsetでseat0の自風をランダム化 *)
+  let players = Array.init 4 (fun i ->
+    let jikaze = jikaze_of_seat 1 ((i + offset) mod 4) in
+    { round.players.(i) with jikaze }
+  ) in
+  let oya = (4 - offset) mod 4 in  (* 東家のseat *)
+  { round with players; current_turn = oya }
 
 (** ツモを実行 *)
 let draw_tile (game : round) : (round, string) result =
