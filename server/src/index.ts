@@ -388,23 +388,17 @@ function notifyCurrentTurn(room: Room): void {
     const phase = getPhase(room.id);
     if (phase === 'waiting_discard') {
       const tenpaiTiles = getTenpai(room.id);
-      const tsumoResult = checkTsumo(room.id);
 
-      // ツモ和了チェック（実際のツモは行わない、判定のみ）
-      // checkTsumoは副作用があるので、stateを戻す必要がある
-      // → 簡略化: canTsumoフラグだけ送る
+      // aiDecideでツモ和了可否を判定（副作用なし）
+      const action = aiDecide(room.id, currentTurn);
+      const canTsumo = action?.action === 'tsumo';
+
       sendJson(player.ws, {
         type: 'your_turn',
-        canTsumo: tsumoResult !== null,
-        canRiichi: false, // TODO: リーチ判定
+        canTsumo,
+        canRiichi: false,
         tenpaiTiles,
       });
-
-      // checkTsumoで状態が変わった場合を考慮してstateを再送
-      if (tsumoResult) {
-        // ツモ和了が実行されてしまったので、stateを再送
-        broadcastGameState(room);
-      }
     }
   }
 }
