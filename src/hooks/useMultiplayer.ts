@@ -109,6 +109,20 @@ export function useMultiplayer() {
       case 'error':
         setState(s => ({ ...s, error: msg.message }));
         break;
+      case 'room_left':
+        setState(s => ({
+          ...s,
+          roomId: null,
+          seat: -1,
+          players: [],
+          gameState: null,
+          agariResult: null,
+          turnInfo: null,
+          messages: [],
+          error: null,
+          gameEnd: null,
+        }));
+        break;
       case 'can_ron':
         // TODO: ロン選択UIの表示
         break;
@@ -158,18 +172,7 @@ export function useMultiplayer() {
 
   const leaveRoom = useCallback(() => {
     send({ type: 'leave_room' });
-    setState(s => ({
-      ...s,
-      roomId: null,
-      seat: -1,
-      players: [],
-      gameState: null,
-      agariResult: null,
-      turnInfo: null,
-      messages: [],
-      error: null,
-      gameEnd: null,
-    }));
+    // サーバーからroom_leftが返ってきた時にhandleMessageで状態リセットされる
   }, [send]);
 
   return {
