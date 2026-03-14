@@ -18,6 +18,7 @@ type round = {
   honba : int;                 (** 本場 *)
   riichi_sticks : int;         (** リーチ棒の数 *)
   seat_offset : int;           (** 席順オフセット（ランダム化用） *)
+  kan_count : int;             (** カン回数（ドラ増加用） *)
   wall : Wall.t;               (** 牌山 *)
   players : Player.t array;    (** プレイヤー *)
   current_turn : int;          (** 現在の手番 (0-3) *)
@@ -85,6 +86,7 @@ let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int
     honba;
     riichi_sticks;
     seat_offset;
+    kan_count = 0;
     wall = wall_after_deal;
     players;
     current_turn = oya;
@@ -153,7 +155,7 @@ let ron (game : round) (winner : int) : (round, string) result =
     if is_furiten player tile then Error "振聴のためロンできません"
     else
     let tiles = tile :: player.hand.tiles in
-    let dora_count = Wall.count_dora game.wall 0 tiles in
+    let dora_count = Wall.count_dora game.wall game.kan_count tiles in
     let ctx = {
       Yaku.is_tsumo = false;
       is_riichi = player.is_riichi;
@@ -183,7 +185,7 @@ let ron (game : round) (winner : int) : (round, string) result =
 (** ツモ和了の処理 *)
 let tsumo_agari (game : round) : (round, string) result =
   let player = game.players.(game.current_turn) in
-  let dora_count = Wall.count_dora game.wall 0 player.hand.tiles in
+  let dora_count = Wall.count_dora game.wall game.kan_count player.hand.tiles in
   let ctx = {
     Yaku.is_tsumo = true;
     is_riichi = player.is_riichi;

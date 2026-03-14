@@ -110,7 +110,7 @@ let game_state_to_json (game : Game.round) : string =
   let last_d = match game.last_discard with
     | Some t -> tile_to_json t | None -> json_null
   in
-  let dora = json_arr (List.map tile_to_json (Wall.dora_indicators game.wall 0)) in
+  let dora = json_arr (List.map tile_to_json (Wall.dora_indicators game.wall game.kan_count)) in
   json_obj [
     ("players", players); ("current_turn", json_int game.current_turn);
     ("phase", json_str phase_str); ("bakaze", json_str bakaze_str);
@@ -385,6 +385,7 @@ let do_minkan seat : string =
         let new_game = { game with
           players; current_turn = seat;
           phase = Game.WaitingDraw;
+          kan_count = game.kan_count + 1;
           last_discard = None; last_discard_player = None;
         } in
         game_ref := Some new_game;
@@ -423,6 +424,7 @@ let do_ankan seat kind suit number : string =
       let new_game = { game with
         players; current_turn = seat;
         phase = Game.WaitingDraw;
+        kan_count = game.kan_count + 1;
       } in
       game_ref := Some new_game;
       game_state_to_json new_game
@@ -458,6 +460,7 @@ let do_kakan seat kind suit number : string =
       let new_game = { game with
         players; current_turn = seat;
         phase = Game.WaitingDraw;
+        kan_count = game.kan_count + 1;
       } in
       game_ref := Some new_game;
       game_state_to_json new_game

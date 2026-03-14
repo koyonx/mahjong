@@ -282,7 +282,10 @@ export function GameBoard({ onBack }: GameBoardProps) {
     );
   }
 
-  const topSeat = 2, rightSeat = 3, leftSeat = 1;
+  // 麻雀の席順: 右=下家, 対面, 左=上家
+  const rightSeat = (HUMAN_SEAT + 1) % 4;
+  const topSeat = (HUMAN_SEAT + 2) % 4;
+  const leftSeat = (HUMAN_SEAT + 3) % 4;
   const canTsumo = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT && checkTsumoAgari() !== null;
   const isMyTurn = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT;
   const ankanTiles = isMyTurn ? canAnkan(HUMAN_SEAT) : [];
