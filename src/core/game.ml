@@ -17,8 +17,9 @@ type round = {
   kyoku : int;                 (** 局数 (1-4) *)
   honba : int;                 (** 本場 *)
   riichi_sticks : int;         (** リーチ棒の数 *)
+  seat_offset : int;           (** 席順オフセット（ランダム化用） *)
   wall : Wall.t;               (** 牌山 *)
-  players : Player.t array;    (** プレイヤー（東=0, 南=1, 西=2, 北=3） *)
+  players : Player.t array;    (** プレイヤー *)
   current_turn : int;          (** 現在の手番 (0-3) *)
   phase : phase;               (** フェーズ *)
   last_discard : Tile.tile option;       (** 直前の捨て牌 *)
@@ -64,24 +65,28 @@ let deal (wall : Wall.t) : (Tile.tile list array * Wall.t) =
 
 (** 新しい局を開始 *)
 let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int)
-    (scores : int array) : round =
+    (seat_offset : int) (scores : int array) : round =
   let wall = Wall.create () in
   let (dealt_hands, wall_after_deal) = deal wall in
   let players = Array.init 4 (fun i ->
-    let jikaze = jikaze_of_seat kyoku i in
+    let jikaze = jikaze_of_seat kyoku ((i + seat_offset) mod 4) in
     let p = Player.create jikaze in
     { p with hand = Hand.make dealt_hands.(i); score = scores.(i) }
   ) in
-  (* 親（東家）がツモ *)
-  let oya = (kyoku - 1) mod 4 in
+  (* 東家のseatを探す *)
+  let oya = ref 0 in
+  Array.iteri (fun i (p : Player.t) ->
+    if p.jikaze = Tile.Ton then oya := i
+  ) players;
   {
     bakaze;
     kyoku;
     honba;
     riichi_sticks;
+    seat_offset;
     wall = wall_after_deal;
     players;
-    current_turn = oya;
+    current_turn = !oya;
     phase = WaitingDraw;
     last_discard = None;
     last_discard_player = None;
@@ -90,14 +95,7 @@ let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int
 (** ゲーム開始（席順ランダム、東1局から） *)
 let start () : round =
   let offset = Random.int 4 in
-  let round = new_round Tile.Ton 1 0 0 [|25000; 25000; 25000; 25000|] in
-  (* offsetでseat0の自風をランダム化 *)
-  let players = Array.init 4 (fun i ->
-    let jikaze = jikaze_of_seat 1 ((i + offset) mod 4) in
-    { round.players.(i) with jikaze }
-  ) in
-  let oya = (4 - offset) mod 4 in  (* 東家のseat *)
-  { round with players; current_turn = oya }
+  new_round Tile.Ton 1 0 0 offset [|25000; 25000; 25000; 25000|]
 
 (** ツモを実行 *)
 let draw_tile (game : round) : (round, string) result =
@@ -268,19 +266,23 @@ let next_round (game : round) (oya_won : bool) : round =
     else game
   in
   let scores = Array.map (fun (p : Player.t) -> p.score) game.players in
-  (* 親がテンパイなら連荘 *)
-  let oya_seat = (game.kyoku - 1) mod 4 in
-  let oya_tenpai = is_tenpai game.players.(oya_seat) in
+  let offset = game.seat_offset in
+  (* 東家のseatを見つける *)
+  let oya_seat = ref 0 in
+  Array.iteri (fun i (p : Player.t) ->
+    if p.jikaze = Tile.Ton then oya_seat := i
+  ) game.players;
+  let oya_tenpai = is_tenpai game.players.(!oya_seat) in
   if oya_won || oya_tenpai then
     (* 親の連荘 *)
-    new_round game.bakaze game.kyoku (game.honba + 1) game.riichi_sticks scores
+    new_round game.bakaze game.kyoku (game.honba + 1) game.riichi_sticks offset scores
   else
     let next_kyoku = game.kyoku + 1 in
     if next_kyoku > 4 then
       match game.bakaze with
       | Tile.Ton ->
-        new_round Tile.Nan 1 0 game.riichi_sticks scores
+        new_round Tile.Nan 1 0 game.riichi_sticks offset scores
       | _ ->
         { game with phase = GameEnd }
     else
-      new_round game.bakaze next_kyoku 0 game.riichi_sticks scores
+      new_round game.bakaze next_kyoku 0 game.riichi_sticks offset scores

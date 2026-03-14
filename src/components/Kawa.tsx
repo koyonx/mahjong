@@ -14,7 +14,9 @@ export function Kawa({ tiles, direction = 'horizontal' }: KawaProps) {
     return (
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, auto)',
+        gridTemplateColumns: 'repeat(2, auto)',
+        gridTemplateRows: 'repeat(6, auto)',
+        gridAutoFlow: 'column',
         gap: 2,
         justifyContent: 'center',
       }}>

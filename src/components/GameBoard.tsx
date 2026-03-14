@@ -98,14 +98,46 @@ export function GameBoard({ onBack }: GameBoardProps) {
     processTurn(advanced);
   }, []);
 
+  const advanceToNextRound = useCallback(() => {
+    const next = nextRound(false);
+    if (!next) return;
+    setState(next);
+    if (next.phase === 'game_end') {
+      setMessage('ゲーム終了');
+      return;
+    }
+    setMessage('次の局を開始します');
+    setTimeout(() => {
+      const drawn = drawTile();
+      if (drawn) {
+        setState(drawn);
+        if (drawn.current_turn === HUMAN_SEAT) {
+          setMessage('牌を選んで捨ててください');
+          setTenpaiTiles(getTenpaiTiles());
+        } else {
+          processTurn(drawn);
+        }
+      }
+    }, 500);
+  }, []);
+
   const processTurn = useCallback((currentState: GameState) => {
     setState(currentState);
     if (currentState.phase === 'round_end' || currentState.phase === 'game_end') {
-      setMessage(currentState.phase === 'game_end' ? 'ゲーム終了' : '流局');
+      if (currentState.phase === 'game_end') {
+        setMessage('ゲーム終了');
+      } else {
+        setMessage('流局');
+        setTimeout(() => advanceToNextRound(), 2000);
+      }
       return;
     }
     const drawn = drawTile();
-    if (!drawn) { setMessage('流局'); return; }
+    if (!drawn) {
+      setMessage('流局');
+      setTimeout(() => advanceToNextRound(), 2000);
+      return;
+    }
     setState(drawn);
     if (drawn.current_turn === HUMAN_SEAT) {
       setMessage('牌を選んで捨ててください');
@@ -221,28 +253,8 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
   const handleAgariClose = useCallback(() => {
     setAgariResult(null);
-    const next = nextRound(false);
-    if (next) {
-      setState(next);
-      if (next.phase === 'game_end') {
-        setMessage('ゲーム終了');
-      } else {
-        setMessage('次の局を開始します');
-        setTimeout(() => {
-          const drawn = drawTile();
-          if (drawn) {
-            setState(drawn);
-            if (drawn.current_turn === HUMAN_SEAT) {
-              setMessage('牌を選んで捨ててください');
-              setTenpaiTiles(getTenpaiTiles());
-            } else {
-              processTurn(drawn);
-            }
-          }
-        }, 500);
-      }
-    }
-  }, [processTurn]);
+    advanceToNextRound();
+  }, [advanceToNextRound]);
 
   const handleTsumo = useCallback(() => {
     const result = checkTsumoAgari();
