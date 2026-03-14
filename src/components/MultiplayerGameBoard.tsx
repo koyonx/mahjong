@@ -11,12 +11,16 @@ interface MultiplayerGameBoardProps {
   state: GameState;
   seat: number;
   turnInfo: { canTsumo: boolean; canRiichi: boolean; tenpaiTiles: Tile[] } | null;
+  callInfo: { canPon: boolean; chiOptions: Tile[][] } | null;
   agariResult: { result: AgariResult; winnerSeat: number; winnerName: string } | null;
   messages: string[];
   gameEnd: { name: string; score: number }[] | null;
   onDiscard: (tile: Tile) => void;
   onTsumo: () => void;
   onRiichi: (tile: Tile) => void;
+  onPon: () => void;
+  onChi: (tiles: Tile[]) => void;
+  onSkipCall: () => void;
   onAgariClose: () => void;
   onLeaveRoom: () => void;
 }
@@ -25,11 +29,15 @@ export function MultiplayerGameBoard({
   state,
   seat,
   turnInfo,
+  callInfo,
   agariResult,
   messages,
   gameEnd,
   onDiscard,
   onTsumo,
+  onPon,
+  onChi,
+  onSkipCall,
   onAgariClose,
   onLeaveRoom,
 }: MultiplayerGameBoardProps) {
@@ -160,15 +168,34 @@ export function MultiplayerGameBoard({
           </div>
         )}
 
-        {isMyTurn && turnInfo?.canTsumo && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+        {/* アクションボタン */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+          {isMyTurn && turnInfo?.canTsumo && (
             <button onClick={onTsumo} style={{
               padding: '8px 24px', background: '#c41e3a', border: 'none', borderRadius: 6,
-              color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer',
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
               boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
             }}>ツモ</button>
-          </div>
-        )}
+          )}
+          {callInfo?.canPon && (
+            <button onClick={onPon} style={{
+              padding: '8px 24px', background: '#2a6aaa', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>ポン</button>
+          )}
+          {callInfo && callInfo.chiOptions.length > 0 && callInfo.chiOptions.map((opt, i) => (
+            <button key={i} onClick={() => onChi(opt)} style={{
+              padding: '8px 24px', background: '#2a8a4a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>チー</button>
+          ))}
+          {callInfo && (
+            <button onClick={onSkipCall} style={{
+              padding: '8px 24px', background: '#555', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>スキップ</button>
+          )}
+        </div>
       </div>
 
       {agariResult && (

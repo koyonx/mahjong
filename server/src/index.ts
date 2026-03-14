@@ -13,6 +13,7 @@ import {
   drawTile, discardTile, advanceTurn,
   checkTsumo, checkRon, declareRiichi,
   aiDecide, getTenpai, nextRound,
+  canPon, doPon, canChi, doChi,
 } from './game-controller.ts';
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -111,6 +112,12 @@ function handleMessage(ws: WebSocket, msg: { type: string; [key: string]: unknow
       break;
     case 'ron':
       handleRon(ws);
+      break;
+    case 'pon':
+      handlePon(ws);
+      break;
+    case 'chi':
+      handleChi(ws, msg.tiles as { kind: string; suit: string; number: number; label: string }[]);
       break;
     case 'skip_call':
       handleSkipCall(ws);
@@ -291,44 +298,108 @@ function handleLeaveRoom(ws: WebSocket): void {
   }
 }
 
-function handleSkipCall(_ws: WebSocket): void {
-  // 現在は鳴きスキップのみ（将来的にポン・チー実装時に拡張）
+function handlePon(ws: WebSocket): void {
+  const room = getRoomBySocket(ws);
+  if (!room) return;
+  const seat = getSeatBySocket(ws);
+
+  if (doPon(room.id, seat)) {
+    broadcastToRoom(room, () => JSON.stringify({
+      type: 'message',
+      text: `${room.players.find(p => p.seat === seat)?.name} がポン！`,
+    }));
+    broadcastGameState(room);
+    notifyCurrentTurn(room);
+  } else {
+    sendError(ws, 'ポンできません');
+  }
+}
+
+function handleChi(ws: WebSocket, tiles: { kind: string; suit: string; number: number; label: string }[]): void {
+  const room = getRoomBySocket(ws);
+  if (!room) return;
+  const seat = getSeatBySocket(ws);
+
+  if (tiles.length === 2 && doChi(room.id, seat, tiles[0] as any, tiles[1] as any)) {
+    broadcastToRoom(room, () => JSON.stringify({
+      type: 'message',
+      text: `${room.players.find(p => p.seat === seat)?.name} がチー！`,
+    }));
+    broadcastGameState(room);
+    notifyCurrentTurn(room);
+  } else {
+    sendError(ws, 'チーできません');
+  }
+}
+
+function handleSkipCall(ws: WebSocket): void {
+  const room = getRoomBySocket(ws);
+  if (!room) return;
+  // スキップ: 鳴き判定待ちを解除して次の手番に進む
+  continueAfterCalls(room);
 }
 
 function processAfterDiscard(room: Room): void {
   const currentTurn = getCurrentTurn(room.id);
 
-  // 他プレイヤーのロン判定（人間のみ通知、AIは自動判定）
+  // ロン判定（AIは自動、人間はcan_ronで通知 → 簡略化: 全員自動）
   for (const player of room.players) {
     if (player.seat === currentTurn) continue;
 
-    if (!player.isHuman) {
-      // AIのロン自動判定
-      const ronResult = checkRon(room.id, player.seat);
-      if (ronResult) {
-        broadcastToRoom(room, () => JSON.stringify({
-          type: 'agari',
-          result: {
-            yakus: ronResult.yakus,
-            han: ronResult.han,
-            fu: ronResult.fu,
-            total: ronResult.total,
-            payment: ronResult.payment,
-          },
-          winnerSeat: ronResult.winner,
-          winnerName: player.name,
-        }));
-        broadcastGameState(room);
-
-        setTimeout(() => advanceToNextRound(room), 3000);
-        return;
-      }
+    const ronResult = checkRon(room.id, player.seat);
+    if (ronResult) {
+      broadcastToRoom(room, () => JSON.stringify({
+        type: 'agari',
+        result: {
+          yakus: ronResult.yakus, han: ronResult.han,
+          fu: ronResult.fu, total: ronResult.total,
+          payment: ronResult.payment,
+        },
+        winnerSeat: ronResult.winner,
+        winnerName: player.name,
+      }));
+      broadcastGameState(room);
+      setTimeout(() => advanceToNextRound(room), 3000);
+      return;
     }
-    // 人間のロン判定（手牌にロン可能な役があるか）
-    // 簡略化: 現在は自動スキップ（将来的に通知追加）
   }
 
-  // ロンなし → 次の手番
+  // ポン・チー判定
+  let hasHumanCall = false;
+  for (const player of room.players) {
+    if (player.seat === currentTurn) continue;
+
+    if (player.isHuman && player.ws) {
+      const ponAvail = canPon(room.id, player.seat);
+      const chiOptions = canChi(room.id, player.seat);
+      if (ponAvail || chiOptions.length > 0) {
+        sendJson(player.ws, {
+          type: 'can_call',
+          canPon: ponAvail,
+          chiOptions,
+        });
+        hasHumanCall = true;
+      }
+    } else if (!player.isHuman) {
+      // AIのポン判定（簡略化: AIはポンしない、チーもしない）
+    }
+  }
+
+  if (hasHumanCall) {
+    // 人間の鳴き判定を待つ（タイムアウト: 10秒で自動スキップ）
+    setTimeout(() => {
+      const phase = getPhase(room.id);
+      if (phase === 'waiting_call') {
+        continueAfterCalls(room);
+      }
+    }, 10000);
+    return;
+  }
+
+  continueAfterCalls(room);
+}
+
+function continueAfterCalls(room: Room): void {
   advanceTurn(room.id);
   drawTile(room.id);
   broadcastGameState(room);

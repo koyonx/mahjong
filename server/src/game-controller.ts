@@ -113,6 +113,31 @@ export function getTenpai(roomId: string): Tile[] {
   }
 }
 
+export function canPon(roomId: string, seat: number): boolean {
+  return mahjong.can_pon(roomId, seat);
+}
+
+export function doPon(roomId: string, seat: number): boolean {
+  const result = parse<{ ok: boolean }>(mahjong.do_pon(roomId, seat));
+  return result?.ok ?? false;
+}
+
+export function canChi(roomId: string, seat: number): Tile[][] {
+  try {
+    const raw = JSON.parse(mahjong.can_chi(roomId, seat)) as Tile[][];
+    return raw;
+  } catch {
+    return [];
+  }
+}
+
+export function doChi(roomId: string, seat: number, t1: Tile, t2: Tile): boolean {
+  const result = parse<{ ok: boolean }>(
+    mahjong.do_chi(roomId, seat, t1.kind, t1.suit, t1.number, t2.kind, t2.suit, t2.number)
+  );
+  return result?.ok ?? false;
+}
+
 export function nextRound(roomId: string, oyaWon: boolean): boolean {
   const result = parse<{ ok: boolean }>(mahjong.next_round(roomId, oyaWon));
   return result?.ok ?? false;

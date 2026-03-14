@@ -10,6 +10,7 @@ interface MultiplayerState {
   gameState: GameState | null;
   agariResult: { result: AgariResult; winnerSeat: number; winnerName: string } | null;
   turnInfo: { canTsumo: boolean; canRiichi: boolean; tenpaiTiles: Tile[] } | null;
+  callInfo: { canPon: boolean; chiOptions: Tile[][] } | null;
   messages: string[];
   error: string | null;
   gameEnd: { name: string; score: number }[] | null;
@@ -25,6 +26,7 @@ export function useMultiplayer() {
     gameState: null,
     agariResult: null,
     turnInfo: null,
+    callInfo: null,
     messages: [],
     error: null,
     gameEnd: null,
@@ -69,7 +71,7 @@ export function useMultiplayer() {
         setState(s => ({ ...s, players: msg.players }));
         break;
       case 'game_state':
-        setState(s => ({ ...s, gameState: msg.state, turnInfo: null }));
+        setState(s => ({ ...s, gameState: msg.state, turnInfo: null, callInfo: null }));
         break;
       case 'your_turn':
         setState(s => ({
@@ -110,7 +112,7 @@ export function useMultiplayer() {
         setState(s => ({ ...s, error: msg.message }));
         break;
       case 'seat_assigned':
-        setState(s => ({ ...s, seat: (msg as any).seat }));
+        setState(s => ({ ...s, seat: msg.seat }));
         break;
       case 'room_left':
         setState(s => ({
@@ -126,8 +128,13 @@ export function useMultiplayer() {
           gameEnd: null,
         }));
         break;
+      case 'can_call':
+        setState(s => ({
+          ...s,
+          callInfo: { canPon: (msg as any).canPon, chiOptions: (msg as any).chiOptions },
+        }));
+        break;
       case 'can_ron':
-        // TODO: ロン選択UIの表示
         break;
     }
   }, []);
@@ -173,6 +180,21 @@ export function useMultiplayer() {
     setState(s => ({ ...s, agariResult: null }));
   }, []);
 
+  const pon = useCallback(() => {
+    send({ type: 'pon' });
+    setState(s => ({ ...s, callInfo: null }));
+  }, [send]);
+
+  const chi = useCallback((tiles: Tile[]) => {
+    send({ type: 'chi', tiles });
+    setState(s => ({ ...s, callInfo: null }));
+  }, [send]);
+
+  const skipCall = useCallback(() => {
+    send({ type: 'skip_call' });
+    setState(s => ({ ...s, callInfo: null }));
+  }, [send]);
+
   const leaveRoom = useCallback(() => {
     send({ type: 'leave_room' });
     // サーバーからroom_leftが返ってきた時にhandleMessageで状態リセットされる
@@ -187,6 +209,9 @@ export function useMultiplayer() {
     tsumo,
     riichi,
     clearAgari,
+    pon,
+    chi,
+    skipCall,
     leaveRoom,
   };
 }

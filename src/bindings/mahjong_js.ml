@@ -46,15 +46,35 @@ let payment_to_json (p : Scoring.payment) : string =
     json_obj [("kind", json_str "tsumo_ko"); ("oya_pay", json_int oya); ("ko_pay", json_int ko)]
 
 let player_to_json (p : Player.t) : string =
-  let hand = json_arr (List.map tile_to_json p.hand.tiles) in
+  (* ツモ牌を分離: 手牌からツモ牌を除いたソート済みリスト + ツモ牌 *)
+  let (sorted_hand, tsumo_tile) = match p.hand.tsumo with
+    | Some t ->
+      (match Mentsu.remove_one t p.hand.tiles with
+       | Some rest -> (List.sort Tile.compare rest, tile_to_json t)
+       | None -> (List.sort Tile.compare p.hand.tiles, json_null))
+    | None -> (List.sort Tile.compare p.hand.tiles, json_null)
+  in
+  let hand = json_arr (List.map tile_to_json sorted_hand) in
   let kawa = json_arr (List.rev_map tile_to_json p.kawa) in
   let jikaze_str = match p.jikaze with
     | Tile.Ton -> "ton" | Tile.Nan -> "nan"
     | Tile.Sha -> "sha" | Tile.Pei -> "pei"
     | _ -> "ton"
   in
+  let furo = json_arr (List.map (fun f ->
+    match f with
+    | Player.Chi (t1, t2, t3) ->
+      json_obj [("type", json_str "chi"); ("tiles", json_arr [tile_to_json t1; tile_to_json t2; tile_to_json t3])]
+    | Player.Pon t ->
+      json_obj [("type", json_str "pon"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t])]
+    | Player.Minkan t ->
+      json_obj [("type", json_str "kan"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t; tile_to_json t])]
+    | Player.Ankan t ->
+      json_obj [("type", json_str "ankan"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t; tile_to_json t])]
+  ) p.furo_list) in
   json_obj [
-    ("hand", hand); ("kawa", kawa); ("score", json_int p.score);
+    ("hand", hand); ("tsumo", tsumo_tile); ("furo", furo);
+    ("kawa", kawa); ("score", json_int p.score);
     ("is_riichi", json_bool p.is_riichi); ("is_menzen", json_bool (Player.is_menzen p));
     ("jikaze", json_str jikaze_str)
   ]

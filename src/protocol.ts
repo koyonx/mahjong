@@ -28,9 +28,11 @@ export type ServerMessage =
   | { type: 'room_created'; roomId: string; seat: number }
   | { type: 'room_joined'; roomId: string; seat: number }
   | { type: 'room_left' }
+  | { type: 'seat_assigned'; seat: number }
   | { type: 'player_list'; players: PlayerInfo[] }
   | { type: 'game_state'; state: GameState }
   | { type: 'your_turn'; canTsumo: boolean; canRiichi: boolean; tenpaiTiles: Tile[] }
+  | { type: 'can_call'; canPon: boolean; chiOptions: Tile[][] }
   | { type: 'can_ron' }
   | { type: 'agari'; result: AgariResult; winnerSeat: number; winnerName: string }
   | { type: 'round_end'; reason: string }

@@ -1,4 +1,4 @@
-import type { Tile, Player } from '../mahjong-bridge';
+import type { Tile, Player, Furo } from '../mahjong-bridge';
 import { TileView } from './TileView';
 import { kazeToJa } from '../mahjong-bridge';
 
@@ -12,6 +12,20 @@ interface PlayerHandProps {
   compact?: boolean;
 }
 
+function FuroGroup({ furo }: { furo: Furo }) {
+  return (
+    <div style={{
+      display: 'flex', gap: 1,
+      padding: '0 4px',
+      borderLeft: '2px solid rgba(255,255,255,0.15)',
+    }}>
+      {furo.tiles.map((tile, i) => (
+        <TileView key={i} tile={tile} small />
+      ))}
+    </div>
+  );
+}
+
 export function PlayerHand({
   player,
   isCurrentTurn,
@@ -21,8 +35,13 @@ export function PlayerHand({
   onSelectTile,
   compact,
 }: PlayerHandProps) {
+  const handTiles = player.hand ?? [];
+  const tsumoTile = player.tsumo;
+  const furoList = player.furo ?? [];
+
   return (
     <div>
+      {/* プレイヤー情報 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
         fontSize: compact ? 11 : 13,
@@ -47,31 +66,69 @@ export function PlayerHand({
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {player.hand ? (
-          player.hand.map((tile, i) => (
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0, justifyContent: 'center' }}>
+        {/* 副露 */}
+        {furoList.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, marginRight: 8 }}>
+            {furoList.map((f, i) => <FuroGroup key={i} furo={f} />)}
+          </div>
+        )}
+
+        {/* メイン手牌（ソート済み） */}
+        <div style={{ display: 'flex', gap: 2 }}>
+          {isHuman ? (
+            handTiles.map((tile, i) => (
+              <div
+                key={`${tile.kind}-${tile.suit}-${tile.number}-${i}`}
+                style={{
+                  transition: 'transform 0.3s ease, opacity 0.3s ease',
+                }}
+              >
+                <TileView
+                  tile={tile}
+                  small={compact}
+                  selected={selectedTile === i}
+                  onClick={isCurrentTurn && onSelectTile
+                    ? () => {
+                        if (selectedTile === i && onDiscard) {
+                          onDiscard(tile);
+                        } else {
+                          onSelectTile(i);
+                        }
+                      }
+                    : undefined
+                  }
+                />
+              </div>
+            ))
+          ) : (
+            // 他プレイヤー: 裏面表示
+            Array.from({ length: player.hand_count ?? (handTiles.length + (tsumoTile ? 1 : 0)) }, (_, i) => (
+              <TileView key={i} tile={{ kind: 'jihai', suit: 'kaze', number: 1, label: '' }} faceDown small={compact} />
+            ))
+          )}
+        </div>
+
+        {/* ツモ牌（右端に分離） */}
+        {isHuman && tsumoTile && (
+          <div style={{ marginLeft: 12, transition: 'transform 0.3s ease' }}>
             <TileView
-              key={i}
-              tile={tile}
-              faceDown={!isHuman}
+              tile={tsumoTile}
               small={compact}
-              selected={isHuman && selectedTile === i}
-              onClick={isHuman && isCurrentTurn && onSelectTile
+              selected={selectedTile === handTiles.length}
+              onClick={isCurrentTurn && onSelectTile
                 ? () => {
-                    if (selectedTile === i && onDiscard) {
-                      onDiscard(tile);
+                    const tsumoIdx = handTiles.length;
+                    if (selectedTile === tsumoIdx && onDiscard) {
+                      onDiscard(tsumoTile);
                     } else {
-                      onSelectTile(i);
+                      onSelectTile(tsumoIdx);
                     }
                   }
                 : undefined
               }
             />
-          ))
-        ) : (
-          Array.from({ length: player.hand_count ?? 13 }, (_, i) => (
-            <TileView key={i} tile={{ kind: 'jihai', suit: 'kaze', number: 1, label: '' }} faceDown small={compact} />
-          ))
+          </div>
         )}
       </div>
     </div>

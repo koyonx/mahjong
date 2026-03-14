@@ -12,9 +12,16 @@ export interface Tile {
   label: string;
 }
 
+export interface Furo {
+  type: 'chi' | 'pon' | 'kan' | 'ankan';
+  tiles: Tile[];
+}
+
 export interface Player {
   hand: Tile[] | null;
+  tsumo: Tile | null;
   hand_count: number;
+  furo: Furo[];
   kawa: Tile[];
   score: number;
   is_riichi: boolean;
