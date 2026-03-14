@@ -27,6 +27,7 @@ export interface PlayerInfo {
 export type ServerMessage =
   | { type: 'room_created'; roomId: string; seat: number }
   | { type: 'room_joined'; roomId: string; seat: number }
+  | { type: 'room_left' }
   | { type: 'player_list'; players: PlayerInfo[] }
   | { type: 'game_state'; state: GameState }
   | { type: 'your_turn'; canTsumo: boolean; canRiichi: boolean; tenpaiTiles: Tile[] }
