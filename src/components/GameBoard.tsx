@@ -3,7 +3,7 @@ import type { Tile, GameState, AgariResult } from '../mahjong-bridge';
 import {
   startGame, drawTile, discardTile, advanceTurn,
   checkTsumoAgari, checkRon, getTenpaiTiles, nextRound,
-  kazeToJa
+  declareRiichi, aiDecide, kazeToJa
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
@@ -111,20 +111,27 @@ export function GameBoard() {
       setMessage(`${kazeToJa(drawn.players[drawn.current_turn].jikaze)}家の番...`);
 
       setTimeout(() => {
-        // CPUツモ和了チェック
-        const tsumoResult = checkTsumoAgari();
-        if (tsumoResult) {
-          setState(tsumoResult.state);
-          setAgariResult(tsumoResult);
-          setAgariWinner(`${kazeToJa(drawn.players[drawn.current_turn].jikaze)}家`);
-          return;
+        // CPU AI判定
+        const aiAction = aiDecide(drawn.current_turn);
+        if (!aiAction) return;
+
+        if (aiAction.action === 'tsumo') {
+          const tsumoResult = checkTsumoAgari();
+          if (tsumoResult) {
+            setState(tsumoResult.state);
+            setAgariResult(tsumoResult);
+            setAgariWinner(`${kazeToJa(drawn.players[drawn.current_turn].jikaze)}家`);
+            return;
+          }
         }
 
-        // CPU打牌（最初の牌を捨てる簡易AI）
-        const cpuPlayer = drawn.players[drawn.current_turn];
-        if (cpuPlayer.hand.length > 0) {
-          const tileToDiscard = cpuPlayer.hand[0];
-          const afterDiscard = discardTile(tileToDiscard);
+        if (aiAction.action === 'riichi') {
+          const riichiState = declareRiichi();
+          if (riichiState) setState(riichiState);
+        }
+
+        if (aiAction.tile) {
+          const afterDiscard = discardTile(aiAction.tile);
           if (afterDiscard) {
             setState(afterDiscard);
             setTimeout(() => processAfterDiscard(afterDiscard), 300);
@@ -185,7 +192,6 @@ export function GameBoard() {
 
   // プレイヤーの表示順: 対面(2) → 右(3) → 左(1) → 自分(0)
   const seatOrder = [2, 3, 1, 0];
-  const seatLabels = ['対面', '右', '左', 'あなた'];
 
   const canTsumo = state.phase === 'waiting_discard'
     && state.current_turn === HUMAN_SEAT
