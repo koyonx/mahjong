@@ -1,14 +1,17 @@
-.PHONY: setup build test dev clean ocaml-build ocaml-test ocaml-watch melange-copy docker-build
+.PHONY: setup build test dev clean ocaml-build ocaml-test ocaml-watch melange-copy docker-build server-dev server-install
 
 # === セットアップ ===
 
-setup: docker-build npm-install melange-copy ## 初回セットアップ（Docker + npm + Melange出力コピー）
+setup: docker-build npm-install server-install melange-copy ## 初回セットアップ（Docker + npm + Melange出力コピー）
 
 docker-build: ## Dockerイメージをビルド
 	docker compose build
 
 npm-install: ## npm依存関係をインストール
 	npm install
+
+server-install: ## サーバー依存関係をインストール
+	cd server && npm install
 
 # === OCaml (Docker) ===
 
@@ -29,10 +32,20 @@ ocaml-shell: ## OCamlコンテナにシェルで入る
 melange-copy: ## MelangeのJS出力をsrc/generatedにコピー
 	bash scripts/copy-melange-output.sh
 
+# === サーバー ===
+
+server-dev: ## WebSocketサーバーを起動（開発モード）
+	cd server && npm run dev
+
 # === フロントエンド ===
 
-dev: ## 開発サーバーを起動
+dev: ## 開発サーバーを起動（フロント + サーバー両方必要）
 	npm run dev
+
+dev-all: ## フロント + サーバーを同時起動
+	@echo "ターミナル1: make server-dev"
+	@echo "ターミナル2: make dev"
+	@echo "（別々のターミナルで実行してください）"
 
 build: ocaml-build melange-copy ## プロダクションビルド（OCaml + フロント）
 	npm run build
