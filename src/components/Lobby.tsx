@@ -11,6 +11,7 @@ interface LobbyProps {
   onCreateRoom: (name: string) => void;
   onJoinRoom: (roomId: string, name: string) => void;
   onStartGame: () => void;
+  onLeaveRoom: () => void;
 }
 
 export function Lobby({
@@ -22,6 +23,7 @@ export function Lobby({
   onCreateRoom,
   onJoinRoom,
   onStartGame,
+  onLeaveRoom,
 }: LobbyProps) {
   const [playerName, setPlayerName] = useState('');
   const [joinRoomId, setJoinRoomId] = useState('');
@@ -94,6 +96,13 @@ export function Lobby({
         {!isHost && (
           <p className="text-green-300">ホストがゲームを開始するのを待っています...</p>
         )}
+
+        <button
+          onClick={onLeaveRoom}
+          className="text-green-400 hover:text-red-400 text-sm transition"
+        >
+          ルームを退出する
+        </button>
 
         {error && <p className="text-red-400">{error}</p>}
       </div>
