@@ -237,6 +237,110 @@ let next_round oya_won : string =
     game_ref := Some new_game;
     game_state_to_json new_game
 
+(** ポン可否判定 *)
+let can_pon seat : bool =
+  match !game_ref with
+  | None -> false
+  | Some game ->
+    match game.last_discard with
+    | None -> false
+    | Some tile ->
+      let player = game.players.(seat) in
+      let count = List.length (List.filter (fun t -> Tile.compare t tile = 0) player.hand.tiles) in
+      count >= 2
+
+(** ポン実行 *)
+let do_pon seat : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    match game.last_discard with
+    | None -> json_null
+    | Some tile ->
+      let player = game.players.(seat) in
+      match Player.pon tile player with
+      | Ok new_player ->
+        let players = Array.copy game.players in
+        players.(seat) <- new_player;
+        let new_game = { game with
+          players;
+          current_turn = seat;
+          phase = Game.WaitingDiscard;
+          last_discard = None;
+          last_discard_player = None;
+        } in
+        game_ref := Some new_game;
+        game_state_to_json new_game
+      | Error _ -> json_null
+
+(** チー可否判定 *)
+let can_chi seat : string =
+  match !game_ref with
+  | None -> json_arr []
+  | Some game ->
+    match game.last_discard with
+    | None -> json_arr []
+    | Some tile ->
+      match game.last_discard_player with
+      | None -> json_arr []
+      | Some discarder ->
+        if (discarder + 1) mod 4 <> seat then json_arr []
+        else
+          let player = game.players.(seat) in
+          let hand = player.hand.tiles in
+          let results = ref [] in
+          (match tile with
+           | Tile.Suhai (suit, n) ->
+             if n >= 3 then begin
+               let t1 = Tile.Suhai (suit, n - 2) in
+               let t2 = Tile.Suhai (suit, n - 1) in
+               if List.exists (fun t -> Tile.compare t t1 = 0) hand &&
+                  List.exists (fun t -> Tile.compare t t2 = 0) hand then
+                 results := json_arr [tile_to_json t1; tile_to_json t2] :: !results
+             end;
+             if n >= 2 && n <= 8 then begin
+               let t1 = Tile.Suhai (suit, n - 1) in
+               let t2 = Tile.Suhai (suit, n + 1) in
+               if List.exists (fun t -> Tile.compare t t1 = 0) hand &&
+                  List.exists (fun t -> Tile.compare t t2 = 0) hand then
+                 results := json_arr [tile_to_json t1; tile_to_json t2] :: !results
+             end;
+             if n <= 7 then begin
+               let t1 = Tile.Suhai (suit, n + 1) in
+               let t2 = Tile.Suhai (suit, n + 2) in
+               if List.exists (fun t -> Tile.compare t t1 = 0) hand &&
+                  List.exists (fun t -> Tile.compare t t2 = 0) hand then
+                 results := json_arr [tile_to_json t1; tile_to_json t2] :: !results
+             end
+           | _ -> ());
+          json_arr !results
+
+(** チー実行 *)
+let do_chi seat t1_kind t1_suit t1_num t2_kind t2_suit t2_num : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    match game.last_discard with
+    | None -> json_null
+    | Some taken ->
+      let t1 = tile_of_kind_suit_number t1_kind t1_suit t1_num in
+      let t2 = tile_of_kind_suit_number t2_kind t2_suit t2_num in
+      let player = game.players.(seat) in
+      match Player.chi t1 t2 taken player with
+      | Ok new_player ->
+        let players = Array.copy game.players in
+        players.(seat) <- new_player;
+        let new_game = { game with
+          players;
+          current_turn = seat;
+          phase = Game.WaitingDiscard;
+          last_discard = None;
+          last_discard_player = None;
+        } in
+        game_ref := Some new_game;
+        game_state_to_json new_game
+      | Error _ -> json_null
+
 (** CPU AI の行動を決定 *)
 let ai_decide seat : string =
   match !game_ref with

@@ -3,7 +3,8 @@ import type { Tile, GameState, AgariResult } from '../mahjong-bridge';
 import {
   startGame, drawTile, discardTile, advanceTurn,
   checkTsumoAgari, checkRon, getTenpaiTiles, nextRound,
-  declareRiichi, aiDecide, kazeToJa
+  declareRiichi, aiDecide, kazeToJa,
+  canPon, doPon, canChi, doChi,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
@@ -25,6 +26,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [agariWinner, setAgariWinner] = useState<string>('');
   const [tenpaiTiles, setTenpaiTiles] = useState<Tile[]>([]);
   const [message, setMessage] = useState<string>('');
+  const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][] } | null>(null);
 
   const handleStart = useCallback(() => {
     const newState = startGame();
@@ -57,7 +59,15 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setTimeout(() => processAfterDiscard(newState), 300);
   }, [state]);
 
+  const continueAfterCalls = useCallback(() => {
+    setCallInfo(null);
+    const advanced = advanceTurn();
+    if (!advanced) return;
+    processTurn(advanced);
+  }, []);
+
   const processAfterDiscard = useCallback((currentState: GameState) => {
+    // ロン判定
     for (let i = 0; i < 4; i++) {
       if (i === currentState.current_turn) continue;
       const ronResult = checkRon(i);
@@ -68,6 +78,19 @@ export function GameBoard({ onBack }: GameBoardProps) {
         return;
       }
     }
+
+    // 人間(seat 0)のポン・チー判定
+    const HUMAN = 0;
+    if (currentState.current_turn !== HUMAN) {
+      const ponAvail = canPon(HUMAN);
+      const chiOptions = canChi(HUMAN);
+      if (ponAvail || chiOptions.length > 0) {
+        setCallInfo({ canPon: ponAvail, chiOptions });
+        setMessage('鳴きますか？');
+        return; // ユーザーの選択を待つ
+      }
+    }
+
     const advanced = advanceTurn();
     if (!advanced) return;
     processTurn(advanced);
@@ -115,6 +138,34 @@ export function GameBoard({ onBack }: GameBoardProps) {
       }, 500);
     }
   }, [processAfterDiscard]);
+
+  const handlePon = useCallback(() => {
+    const newState = doPon(HUMAN_SEAT);
+    if (newState) {
+      setState(newState);
+      setCallInfo(null);
+      setMessage('ポン！ 牌を捨ててください');
+      setTenpaiTiles(getTenpaiTiles());
+    }
+  }, []);
+
+  const handleChi = useCallback((tiles: Tile[]) => {
+    if (tiles.length === 2) {
+      const newState = doChi(HUMAN_SEAT, tiles[0], tiles[1]);
+      if (newState) {
+        setState(newState);
+        setCallInfo(null);
+        setMessage('チー！ 牌を捨ててください');
+        setTenpaiTiles(getTenpaiTiles());
+      }
+    }
+  }, []);
+
+  const handleSkipCall = useCallback(() => {
+    setCallInfo(null);
+    setMessage('');
+    continueAfterCalls();
+  }, [continueAfterCalls]);
 
   const handleAgariClose = useCallback(() => {
     setAgariResult(null);
@@ -248,15 +299,34 @@ export function GameBoard({ onBack }: GameBoardProps) {
             {tenpaiTiles.map((t, i) => <TileView key={i} tile={t} small />)}
           </div>
         )}
-        {canTsumo && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+        {/* アクションボタン */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+          {canTsumo && (
             <button onClick={handleTsumo} style={{
               padding: '8px 24px', background: '#c41e3a', border: 'none', borderRadius: 6,
-              color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer',
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
               boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
             }}>ツモ</button>
-          </div>
-        )}
+          )}
+          {callInfo?.canPon && (
+            <button onClick={handlePon} style={{
+              padding: '8px 24px', background: '#2a6aaa', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>ポン</button>
+          )}
+          {callInfo && callInfo.chiOptions.length > 0 && callInfo.chiOptions.map((opt, i) => (
+            <button key={i} onClick={() => handleChi(opt)} style={{
+              padding: '8px 24px', background: '#2a8a4a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>チー</button>
+          ))}
+          {callInfo && (
+            <button onClick={handleSkipCall} style={{
+              padding: '8px 24px', background: '#555', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>スキップ</button>
+          )}
+        </div>
       </div>
 
       {agariResult && <AgariDialog result={agariResult} winnerName={agariWinner} onClose={handleAgariClose} />}

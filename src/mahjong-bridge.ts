@@ -127,6 +127,28 @@ export function nextRound(oyaWon: boolean): GameState | null {
   return parse<GameState>(mahjongJs.next_round(oyaWon));
 }
 
+// === ポン・チー ===
+
+export function canPon(seat: number): boolean {
+  return mahjongJs.can_pon(seat);
+}
+
+export function doPon(seat: number): GameState | null {
+  return parse<GameState>(mahjongJs.do_pon(seat));
+}
+
+export function canChi(seat: number): Tile[][] {
+  try {
+    return JSON.parse(mahjongJs.can_chi(seat)) as Tile[][];
+  } catch {
+    return [];
+  }
+}
+
+export function doChi(seat: number, t1: Tile, t2: Tile): GameState | null {
+  return parse<GameState>(mahjongJs.do_chi(seat, t1.kind, t1.suit, t1.number, t2.kind, t2.suit, t2.number));
+}
+
 // === AI ===
 
 export interface AiAction {
