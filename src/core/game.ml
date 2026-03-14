@@ -68,16 +68,17 @@ let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int
     (seat_offset : int) (scores : int array) : round =
   let wall = Wall.create () in
   let (dealt_hands, wall_after_deal) = deal wall in
+  (* 親(東家)のseat: kyokuとoffsetで決定 *)
+  let oya = ((kyoku - 1) + seat_offset) mod 4 in
   let players = Array.init 4 (fun i ->
-    let jikaze = jikaze_of_seat kyoku ((i + seat_offset) mod 4) in
+    (* seat i の自風: 親からの距離で決定 *)
+    let dist = (i - oya + 4) mod 4 in
+    let jikaze = match dist with
+      | 0 -> Tile.Ton | 1 -> Tile.Nan | 2 -> Tile.Sha | _ -> Tile.Pei
+    in
     let p = Player.create jikaze in
     { p with hand = Hand.make dealt_hands.(i); score = scores.(i) }
   ) in
-  (* 東家のseatを探す *)
-  let oya = ref 0 in
-  Array.iteri (fun i (p : Player.t) ->
-    if p.jikaze = Tile.Ton then oya := i
-  ) players;
   {
     bakaze;
     kyoku;
@@ -86,7 +87,7 @@ let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int
     seat_offset;
     wall = wall_after_deal;
     players;
-    current_turn = !oya;
+    current_turn = oya;
     phase = WaitingDraw;
     last_discard = None;
     last_discard_player = None;
@@ -267,12 +268,8 @@ let next_round (game : round) (oya_won : bool) : round =
   in
   let scores = Array.map (fun (p : Player.t) -> p.score) game.players in
   let offset = game.seat_offset in
-  (* 東家のseatを見つける *)
-  let oya_seat = ref 0 in
-  Array.iteri (fun i (p : Player.t) ->
-    if p.jikaze = Tile.Ton then oya_seat := i
-  ) game.players;
-  let oya_tenpai = is_tenpai game.players.(!oya_seat) in
+  let oya_seat = ((game.kyoku - 1) + offset) mod 4 in
+  let oya_tenpai = is_tenpai game.players.(oya_seat) in
   if oya_won || oya_tenpai then
     (* 親の連荘 *)
     new_round game.bakaze game.kyoku (game.honba + 1) game.riichi_sticks offset scores
