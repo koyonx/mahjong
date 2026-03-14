@@ -39,14 +39,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setTimeout(() => {
       const drawn = drawTile();
       if (drawn) {
-        setState(drawn);
-        if (drawn.current_turn === HUMAN_SEAT) {
-          setMessage('牌を選んで捨ててください');
-          setTenpaiTiles(getTenpaiTiles());
-        } else {
-          // CPUの最初のターン
-          processTurn(drawn);
-        }
+        handleTurnAfterDraw(drawn);
       }
     }, 300);
   }, []);
@@ -113,51 +106,30 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setTimeout(() => {
       const drawn = drawTile();
       if (drawn) {
-        setState(drawn);
-        if (drawn.current_turn === HUMAN_SEAT) {
-          setMessage('牌を選んで捨ててください');
-          setTenpaiTiles(getTenpaiTiles());
-        } else {
-          processTurn(drawn);
-        }
+        handleTurnAfterDraw(drawn);
       }
     }, 500);
   }, []);
 
-  const processTurn = useCallback((currentState: GameState) => {
-    setState(currentState);
-    if (currentState.phase === 'round_end' || currentState.phase === 'game_end') {
-      if (currentState.phase === 'game_end') {
-        setMessage('ゲーム終了');
-      } else {
-        setMessage('流局');
-        setTimeout(() => advanceToNextRound(), 2000);
-      }
-      return;
-    }
-    const drawn = drawTile();
-    if (!drawn) {
-      setMessage('流局');
-      setTimeout(() => advanceToNextRound(), 2000);
-      return;
-    }
-    setState(drawn);
-    if (drawn.current_turn === HUMAN_SEAT) {
+  /** ドロー済みの状態からCPU/人間のターン処理 */
+  const handleTurnAfterDraw = useCallback((drawnState: GameState) => {
+    setState(drawnState);
+    if (drawnState.current_turn === HUMAN_SEAT) {
       setMessage('牌を選んで捨ててください');
       setTenpaiTiles(getTenpaiTiles());
       const tsumoResult = checkTsumoAgari();
       if (tsumoResult) setMessage('ツモ和了できます！');
     } else {
-      setMessage(`${kazeToJa(drawn.players[drawn.current_turn].jikaze)}家の番...`);
+      setMessage(`${kazeToJa(drawnState.players[drawnState.current_turn].jikaze)}家の番...`);
       setTimeout(() => {
-        const aiAction = aiDecide(drawn.current_turn);
+        const aiAction = aiDecide(drawnState.current_turn);
         if (!aiAction) return;
         if (aiAction.action === 'tsumo') {
           const tsumoResult = checkTsumoAgari();
           if (tsumoResult) {
             setState(tsumoResult.state);
             setAgariResult(tsumoResult);
-            setAgariWinner(`${kazeToJa(drawn.players[drawn.current_turn].jikaze)}家`);
+            setAgariWinner(`${kazeToJa(drawnState.players[drawnState.current_turn].jikaze)}家`);
             return;
           }
         }
@@ -175,6 +147,27 @@ export function GameBoard({ onBack }: GameBoardProps) {
       }, 500);
     }
   }, [processAfterDiscard]);
+
+  /** ツモ→ターン処理（鳴き/ロン後の次ターンから呼ばれる） */
+  const processTurn = useCallback((currentState: GameState) => {
+    setState(currentState);
+    if (currentState.phase === 'round_end' || currentState.phase === 'game_end') {
+      if (currentState.phase === 'game_end') {
+        setMessage('ゲーム終了');
+      } else {
+        setMessage('流局');
+        setTimeout(() => advanceToNextRound(), 2000);
+      }
+      return;
+    }
+    const drawn = drawTile();
+    if (!drawn) {
+      setMessage('流局');
+      setTimeout(() => advanceToNextRound(), 2000);
+      return;
+    }
+    handleTurnAfterDraw(drawn);
+  }, [handleTurnAfterDraw]);
 
   const handlePon = useCallback(() => {
     const newState = doPon(HUMAN_SEAT);
