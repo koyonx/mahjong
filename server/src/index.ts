@@ -92,7 +92,7 @@ function broadcastGameState(room: Room): void {
 function handleMessage(ws: WebSocket, msg: { type: string; [key: string]: unknown }): void {
   switch (msg.type) {
     case 'create_room':
-      handleCreateRoom(ws, msg.playerName as string);
+      handleCreateRoom(ws, msg.playerName as string, msg.gameMode as string | undefined);
       break;
     case 'join_room':
       handleJoinRoom(ws, msg.roomId as string, msg.playerName as string);
@@ -123,8 +123,9 @@ function handleMessage(ws: WebSocket, msg: { type: string; [key: string]: unknow
   }
 }
 
-function handleCreateRoom(ws: WebSocket, playerName: string): void {
-  const { roomId, seat } = createRoom(ws, playerName);
+function handleCreateRoom(ws: WebSocket, playerName: string, gameMode?: string): void {
+  const mode = (gameMode === 'tonpuu' ? 'tonpuu' : 'hanchan') as 'tonpuu' | 'hanchan';
+  const { roomId, seat } = createRoom(ws, playerName, mode);
   createGameRoom(roomId);
   sendJson(ws, { type: 'room_created', roomId, seat });
 
@@ -157,6 +158,13 @@ function handleStartGame(ws: WebSocket): void {
 
   startRoomGame(room.id);
   startGameEngine(room.id);
+
+  // シャッフル後の座席を各プレイヤーに通知
+  for (const player of room.players) {
+    if (player.ws && player.ws.readyState === 1) {
+      sendJson(player.ws, { type: 'seat_assigned', seat: player.seat });
+    }
+  }
 
   broadcastGameState(room);
   notifyCurrentTurn(room);
@@ -213,18 +221,7 @@ function handleTsumo(ws: WebSocket): void {
   broadcastGameState(room);
 
   // 次の局へ
-  setTimeout(() => {
-    nextRound(room.id, false);
-    const newPhase = getPhase(room.id);
-    if (newPhase === 'game_end') {
-      handleGameEnd(room);
-    } else {
-      drawTile(room.id);
-      broadcastGameState(room);
-      notifyCurrentTurn(room);
-      processAiTurns(room);
-    }
-  }, 3000);
+  setTimeout(() => advanceToNextRound(room), 3000);
 }
 
 function handleRiichi(ws: WebSocket, tile: { kind: string; suit: string; number: number; label: string }): void {
@@ -272,18 +269,7 @@ function handleRon(ws: WebSocket): void {
 
   broadcastGameState(room);
 
-  setTimeout(() => {
-    nextRound(room.id, false);
-    const newPhase = getPhase(room.id);
-    if (newPhase === 'game_end') {
-      handleGameEnd(room);
-    } else {
-      drawTile(room.id);
-      broadcastGameState(room);
-      notifyCurrentTurn(room);
-      processAiTurns(room);
-    }
-  }, 3000);
+  setTimeout(() => advanceToNextRound(room), 3000);
 }
 
 function handleLeaveRoom(ws: WebSocket): void {
@@ -334,18 +320,7 @@ function processAfterDiscard(room: Room): void {
         }));
         broadcastGameState(room);
 
-        setTimeout(() => {
-          nextRound(room.id, false);
-          const newPhase = getPhase(room.id);
-          if (newPhase === 'game_end') {
-            handleGameEnd(room);
-          } else {
-            drawTile(room.id);
-            broadcastGameState(room);
-            notifyCurrentTurn(room);
-            processAiTurns(room);
-          }
-        }, 3000);
+        setTimeout(() => advanceToNextRound(room), 3000);
         return;
       }
     }
@@ -361,18 +336,7 @@ function processAfterDiscard(room: Room): void {
   const phase = getPhase(room.id);
   if (phase === 'round_end') {
     broadcastToRoom(room, () => JSON.stringify({ type: 'round_end', reason: '流局' }));
-    setTimeout(() => {
-      nextRound(room.id, false);
-      const newPhase = getPhase(room.id);
-      if (newPhase === 'game_end') {
-        handleGameEnd(room);
-      } else {
-        drawTile(room.id);
-        broadcastGameState(room);
-        notifyCurrentTurn(room);
-        processAiTurns(room);
-      }
-    }, 2000);
+    setTimeout(() => advanceToNextRound(room), 2000);
     return;
   }
 
@@ -433,18 +397,7 @@ function processAiTurns(room: Room): void {
         }));
         broadcastGameState(room);
 
-        setTimeout(() => {
-          nextRound(room.id, false);
-          const newPhase = getPhase(room.id);
-          if (newPhase === 'game_end') {
-            handleGameEnd(room);
-          } else {
-            drawTile(room.id);
-            broadcastGameState(room);
-            notifyCurrentTurn(room);
-            processAiTurns(room);
-          }
-        }, 3000);
+        setTimeout(() => advanceToNextRound(room), 3000);
         return;
       }
     }
@@ -463,6 +416,31 @@ function processAiTurns(room: Room): void {
       setTimeout(() => processAfterDiscard(room), 500);
     }
   }, 800);
+}
+
+/** 次の局に進む、または東風戦終了チェック */
+function advanceToNextRound(room: Room): void {
+  nextRound(room.id, false);
+  const newPhase = getPhase(room.id);
+
+  // 東風戦: 南場に入ったら終了
+  if (room.gameMode === 'tonpuu') {
+    const stateJson = getState(room.id, 0);
+    const st = JSON.parse(stateJson);
+    if (st.bakaze === 'nan') {
+      handleGameEnd(room);
+      return;
+    }
+  }
+
+  if (newPhase === 'game_end') {
+    handleGameEnd(room);
+  } else {
+    drawTile(room.id);
+    broadcastGameState(room);
+    notifyCurrentTurn(room);
+    processAiTurns(room);
+  }
 }
 
 function handleGameEnd(room: Room): void {

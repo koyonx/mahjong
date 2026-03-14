@@ -109,6 +109,9 @@ export function useMultiplayer() {
       case 'error':
         setState(s => ({ ...s, error: msg.message }));
         break;
+      case 'seat_assigned':
+        setState(s => ({ ...s, seat: (msg as any).seat }));
+        break;
       case 'room_left':
         setState(s => ({
           ...s,
@@ -142,8 +145,8 @@ export function useMultiplayer() {
     }
   }, []);
 
-  const createRoom = useCallback((playerName: string) => {
-    send({ type: 'create_room', playerName });
+  const createRoom = useCallback((playerName: string, gameMode: string = 'hanchan') => {
+    send({ type: 'create_room', playerName, gameMode });
   }, [send]);
 
   const joinRoom = useCallback((roomId: string, playerName: string) => {

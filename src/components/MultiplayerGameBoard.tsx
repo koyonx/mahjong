@@ -4,6 +4,7 @@ import { TileView } from './TileView';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
 import { CenterPanel } from './CenterPanel';
+import { DoraDisplay } from './DoraDisplay';
 import { AgariDialog } from './AgariDialog';
 
 interface MultiplayerGameBoardProps {
@@ -86,6 +87,9 @@ export function MultiplayerGameBoard({
         </div>
       )}
 
+      {/* ドラ表示（左上） */}
+      <DoraDisplay indicators={state.dora_indicators ?? []} />
+
       {lastMessage && (
         <div style={{ textAlign: 'center', padding: '4px 0', color: '#8a8', fontSize: 12, flexShrink: 0 }}>
           {lastMessage}
@@ -99,8 +103,8 @@ export function MultiplayerGameBoard({
           position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         }}>
-          <PlayerHand player={state.players[topSeat]} isCurrentTurn={state.current_turn === topSeat} isHuman={false} compact />
-          <Kawa tiles={state.players[topSeat].kawa} compact />
+          <PlayerHand player={state.players[topSeat]} isCurrentTurn={state.current_turn === topSeat} isHuman={false} />
+          <Kawa tiles={state.players[topSeat].kawa} />
         </div>
 
         {/* 左プレイヤー */}
@@ -108,8 +112,8 @@ export function MultiplayerGameBoard({
           position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         }}>
-          <PlayerHand player={state.players[leftSeat]} isCurrentTurn={state.current_turn === leftSeat} isHuman={false} compact />
-          <Kawa tiles={state.players[leftSeat].kawa} compact />
+          <PlayerHand player={state.players[leftSeat]} isCurrentTurn={state.current_turn === leftSeat} isHuman={false} />
+          <Kawa tiles={state.players[leftSeat].kawa} />
         </div>
 
         {/* 右プレイヤー */}
@@ -117,8 +121,8 @@ export function MultiplayerGameBoard({
           position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         }}>
-          <PlayerHand player={state.players[rightSeat]} isCurrentTurn={state.current_turn === rightSeat} isHuman={false} compact />
-          <Kawa tiles={state.players[rightSeat].kawa} compact />
+          <PlayerHand player={state.players[rightSeat]} isCurrentTurn={state.current_turn === rightSeat} isHuman={false} />
+          <Kawa tiles={state.players[rightSeat].kawa} />
         </div>
 
         {/* 中央パネル */}

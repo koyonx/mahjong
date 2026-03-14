@@ -3,14 +3,19 @@ import { TileView } from './TileView';
 
 interface KawaProps {
   tiles: Tile[];
-  compact?: boolean;
 }
 
-export function Kawa({ tiles, compact }: KawaProps) {
+/** 捨て牌を6列のグリッドで表示（実際の麻雀卓と同じ） */
+export function Kawa({ tiles }: KawaProps) {
   if (tiles.length === 0) return null;
 
   return (
-    <div className={`flex gap-0.5 flex-wrap ${compact ? 'max-w-[180px]' : 'max-w-[280px]'}`}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(6, auto)',
+      gap: 2,
+      justifyContent: 'center',
+    }}>
       {tiles.map((tile, i) => (
         <TileView key={i} tile={tile} small />
       ))}

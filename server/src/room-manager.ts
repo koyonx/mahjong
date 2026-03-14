@@ -7,11 +7,14 @@ export interface PlayerInfo {
   ws: WebSocket | null;
 }
 
+export type GameMode = 'tonpuu' | 'hanchan';
+
 export interface Room {
   id: string;
   players: PlayerInfo[];
   hostWs: WebSocket;
   status: 'waiting' | 'playing' | 'finished';
+  gameMode: GameMode;
   createdAt: number;
 }
 
@@ -27,7 +30,7 @@ function generateRoomId(): string {
   return id;
 }
 
-export function createRoom(ws: WebSocket, playerName: string): { roomId: string; seat: number } {
+export function createRoom(ws: WebSocket, playerName: string, gameMode: GameMode = 'hanchan'): { roomId: string; seat: number } {
   let roomId = generateRoomId();
   while (rooms.has(roomId)) {
     roomId = generateRoomId();
@@ -40,6 +43,7 @@ export function createRoom(ws: WebSocket, playerName: string): { roomId: string;
     ],
     hostWs: ws,
     status: 'waiting',
+    gameMode,
     createdAt: Date.now(),
   };
 
@@ -112,14 +116,21 @@ export function startGame(roomId: string): Room | undefined {
 
   // 空席をAIで埋める
   while (room.players.length < 4) {
-    const seat = room.players.length;
     room.players.push({
-      name: `CPU ${seat + 1}`,
-      seat,
+      name: `CPU ${room.players.length + 1}`,
+      seat: room.players.length,
       isHuman: false,
       ws: null,
     });
   }
+
+  // 座席をランダムにシャッフル
+  const seats = [0, 1, 2, 3];
+  for (let i = seats.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [seats[i], seats[j]] = [seats[j], seats[i]];
+  }
+  room.players.forEach((p, i) => { p.seat = seats[i]; });
 
   room.status = 'playing';
   return room;

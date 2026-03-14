@@ -24,6 +24,8 @@ export interface Player {
 
 export type Phase = 'waiting_draw' | 'waiting_discard' | 'waiting_call' | 'round_end' | 'game_end';
 
+export type GameMode = 'tonpuu' | 'hanchan';
+
 export interface GameState {
   players: Player[];
   current_turn: number;
@@ -32,6 +34,7 @@ export interface GameState {
   kyoku: number;
   honba: number;
   remaining_tiles: number;
+  dora_indicators: Tile[];
   last_discard: Tile | null;
 }
 

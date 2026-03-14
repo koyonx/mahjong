@@ -89,11 +89,13 @@ let game_state_to_json_for_seat (game : Game.round) (viewer_seat : int) : string
   let last_d = match game.last_discard with
     | Some t -> tile_to_json t | None -> json_null
   in
+  let dora = json_arr (List.map tile_to_json (Wall.dora_indicators game.wall 0)) in
   json_obj [
     ("players", players); ("current_turn", json_int game.current_turn);
     ("phase", json_str phase_str); ("bakaze", json_str bakaze_str);
     ("kyoku", json_int game.kyoku); ("honba", json_int game.honba);
     ("remaining_tiles", json_int (Wall.remaining game.wall));
+    ("dora_indicators", dora);
     ("last_discard", last_d)
   ]
 
@@ -115,11 +117,13 @@ let game_state_to_json_full (game : Game.round) : string =
   let last_d = match game.last_discard with
     | Some t -> tile_to_json t | None -> json_null
   in
+  let dora = json_arr (List.map tile_to_json (Wall.dora_indicators game.wall 0)) in
   json_obj [
     ("players", players); ("current_turn", json_int game.current_turn);
     ("phase", json_str phase_str); ("bakaze", json_str bakaze_str);
     ("kyoku", json_int game.kyoku); ("honba", json_int game.honba);
     ("remaining_tiles", json_int (Wall.remaining game.wall));
+    ("dora_indicators", dora);
     ("last_discard", last_d)
   ]
 
