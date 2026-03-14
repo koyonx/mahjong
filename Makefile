@@ -35,7 +35,7 @@ melange-copy: ## MelangeのJS出力をsrc/generatedにコピー
 # === サーバー ===
 
 server-dev: ## WebSocketサーバーを起動（開発モード）
-	cd server && npm run dev
+	node --experimental-strip-types --experimental-detect-module server/src/index.ts
 
 # === フロントエンド ===
 

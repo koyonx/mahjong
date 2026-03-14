@@ -4,7 +4,7 @@ import {
   createRoom, joinRoom, getRoom, getRoomBySocket, getSeatBySocket,
   removePlayer, startGame as startRoomGame,
   broadcastToRoom, sendToSeat, cleanupRooms, type Room,
-} from './room-manager.js';
+} from './room-manager.ts';
 import {
   initGameEngine,
   createRoom as createGameRoom,
@@ -13,7 +13,7 @@ import {
   drawTile, discardTile, advanceTurn,
   checkTsumo, checkRon, declareRiichi,
   aiDecide, getTenpai, nextRound,
-} from './game-controller.js';
+} from './game-controller.ts';
 
 const PORT = Number(process.env.PORT) || 8080;
 
