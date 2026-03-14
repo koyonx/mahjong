@@ -13,11 +13,6 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    // Melange出力のJSファイルをpre-bundleに含める
     include: ['./src/generated/**/*.js'],
-    esbuildOptions: {
-      // esbuildがMelangeのJSを正しく処理できるように
-      target: 'es2020',
-    },
   },
 })
