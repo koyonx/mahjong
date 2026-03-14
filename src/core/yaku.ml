@@ -415,7 +415,7 @@ let judge_yaku (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku lis
   let add y = yakus := y :: !yakus in
 
   (* 役満チェック *)
-  if check_suuankou pattern then add Suuankou;
+  if check_suuankou pattern && ctx.is_tsumo then add Suuankou;
   if check_daisangen pattern then add Daisangen;
   if check_shousuushii pattern then add Shousuushii;
   if check_daisuushii pattern then add Daisuushii;

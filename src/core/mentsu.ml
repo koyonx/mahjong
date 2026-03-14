@@ -74,29 +74,38 @@ let find_agari_patterns (tiles : Tile.tile list) : agari_pattern list =
       !results
   in
 
-  (* 雀頭候補を列挙して、残りから4面子を探す *)
-  let rec try_jantai (tiles : Tile.tile list) : agari_pattern list =
-    match tiles with
-    | [] -> []
-    | t1 :: rest ->
-      let patterns =
-        match remove_one t1 rest with
-        | Some rest_without_pair ->
-          let mentsu_results = extract_mentsu (List.sort Tile.compare rest_without_pair) [] in
-          List.filter_map (fun (ms, leftover) ->
-            if leftover = [] && List.length ms = 4 then
-              Some { mentsu_list = ms; jantai = t1 }
-            else
-              None
-          ) mentsu_results
-        | None -> []
-      in
-      (* 同じ牌の雀頭は一度だけ試す *)
-      let skip_same = List.filter (fun t -> Tile.compare t t1 <> 0) rest in
-      patterns @ try_jantai skip_same
+  (* 一意な雀頭候補を列挙 *)
+  let unique_jantai_candidates =
+    let rec aux seen = function
+      | [] -> []
+      | t :: rest ->
+        if List.exists (fun s -> Tile.compare s t = 0) seen then
+          aux seen rest
+        else
+          (* ペアが存在するか確認 *)
+          let count = List.length (List.filter (fun x -> Tile.compare x t = 0) sorted) in
+          if count >= 2 then t :: aux (t :: seen) rest
+          else aux (t :: seen) rest
+    in
+    aux [] sorted
   in
 
-  try_jantai sorted
+  (* 各雀頭候補について、残りから4面子を探す *)
+  List.concat_map (fun jantai ->
+    match remove_one jantai sorted with
+    | Some rest1 ->
+      (match remove_one jantai rest1 with
+       | Some rest_without_pair ->
+         let mentsu_results = extract_mentsu (List.sort Tile.compare rest_without_pair) [] in
+         List.filter_map (fun (ms, leftover) ->
+           if leftover = [] && List.length ms = 4 then
+             Some { mentsu_list = ms; jantai }
+           else
+             None
+         ) mentsu_results
+       | None -> [])
+    | None -> []
+  ) unique_jantai_candidates
 
 (** 和了判定: 14枚の手牌が4面子1雀頭に分解できるか *)
 let is_agari (tiles : Tile.tile list) : bool =

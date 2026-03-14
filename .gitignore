@@ -3,3 +3,4 @@ dist/
 _build/
 *.bs.js
 .melange.eobjs/
+src/generated/

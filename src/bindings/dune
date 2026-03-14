@@ -1,0 +1,4 @@
+(melange.emit
+ (target output)
+ (libraries mahjong_core)
+ (module_systems es6))
