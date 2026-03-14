@@ -215,6 +215,104 @@ let test_score_hand_integration _ =
     assert_bool "han >= 4" (result.han_detail >= 4)
   | None -> assert_failure "should score"
 
+(* === Wall tests === *)
+
+let test_wall_create _ =
+  let wall = Wall.create_with_seed 42 in
+  assert_equal 122 (Wall.remaining wall)  (* 136 - 14(王牌) = 122 *)
+
+let test_wall_draw _ =
+  let wall = Wall.create_with_seed 42 in
+  match Wall.draw wall with
+  | Some (_, new_wall) ->
+    assert_equal 121 (Wall.remaining new_wall)
+  | None -> assert_failure "should draw"
+
+let test_wall_dora_indicator _ =
+  let wall = Wall.create_with_seed 42 in
+  let indicators = Wall.dora_indicators wall 0 in
+  assert_equal 1 (List.length indicators)
+
+let test_dora_of_indicator _ =
+  (* 1m → 2m *)
+  assert_equal (m 2) (Wall.dora_of_indicator (m 1));
+  (* 9m → 1m *)
+  assert_equal (m 1) (Wall.dora_of_indicator (m 9));
+  (* 北 → 東 *)
+  assert_equal (Tile.Jihai Tile.Ton) (Wall.dora_of_indicator (Tile.Jihai Tile.Pei));
+  (* 中 → 白 *)
+  assert_equal haku (Wall.dora_of_indicator chun)
+
+(* === Player tests === *)
+
+let test_player_create _ =
+  let player = Player.create Tile.Ton in
+  assert_equal 25000 player.score;
+  assert_bool "menzen" (Player.is_menzen player);
+  assert_equal false player.is_riichi
+
+let test_player_pon _ =
+  let player = { (Player.create Tile.Ton) with hand = Hand.make [m 1; m 1; m 2; m 3] } in
+  match Player.pon (m 1) player with
+  | Ok new_player ->
+    assert_equal 2 (Hand.count new_player.hand);
+    assert_bool "not menzen after pon" (not (Player.is_menzen new_player))
+  | Error e -> assert_failure e
+
+(* === Game tests === *)
+
+let test_game_start _ =
+  let game = Game.start () in
+  assert_equal Game.WaitingDraw game.phase;
+  (* 全員13枚配牌 *)
+  Array.iter (fun (p : Player.t) ->
+    assert_equal 13 (Hand.count p.hand)
+  ) game.players;
+  (* 持ち点合計10万点 *)
+  let total_score = Array.fold_left (fun acc (p : Player.t) -> acc + p.score) 0 game.players in
+  assert_equal 100000 total_score
+
+let test_game_draw_and_discard _ =
+  let game = Game.start () in
+  match Game.draw_tile game with
+  | Ok game2 ->
+    assert_equal Game.WaitingDiscard game2.phase;
+    let player = game2.players.(game2.current_turn) in
+    assert_equal 14 (Hand.count player.hand);
+    (* 最初の牌を捨てる *)
+    let tile = List.hd player.hand.tiles in
+    (match Game.discard_tile game2 tile with
+     | Ok game3 ->
+       assert_equal Game.WaitingCall game3.phase;
+       assert_equal (Some tile) game3.last_discard
+     | Error e -> assert_failure e)
+  | Error e -> assert_failure e
+
+let test_game_advance_turn _ =
+  let game = Game.start () in
+  let initial_turn = game.current_turn in
+  match Game.draw_tile game with
+  | Ok game2 ->
+    let player = game2.players.(game2.current_turn) in
+    let tile = List.hd player.hand.tiles in
+    (match Game.discard_tile game2 tile with
+     | Ok game3 ->
+       let game4 = Game.advance_turn game3 in
+       assert_equal ((initial_turn + 1) mod 4) game4.current_turn;
+       assert_equal Game.WaitingDraw game4.phase
+     | Error e -> assert_failure e)
+  | Error e -> assert_failure e
+
+let test_jikaze_assignment _ =
+  (* 東1局: seat0=東, seat1=南, seat2=西, seat3=北 *)
+  assert_equal Tile.Ton (Game.jikaze_of_seat 1 0);
+  assert_equal Tile.Nan (Game.jikaze_of_seat 1 1);
+  assert_equal Tile.Sha (Game.jikaze_of_seat 1 2);
+  assert_equal Tile.Pei (Game.jikaze_of_seat 1 3);
+  (* 東2局: seat1=東 *)
+  assert_equal Tile.Pei (Game.jikaze_of_seat 2 0);
+  assert_equal Tile.Ton (Game.jikaze_of_seat 2 1)
+
 (* === Test suite === *)
 
 let suite =
@@ -244,6 +342,16 @@ let suite =
     "scoring_ko_tsumo" >:: test_scoring_ko_tsumo;
     "scoring_yakuman" >:: test_scoring_yakuman;
     "score_hand_integration" >:: test_score_hand_integration;
+    "wall_create" >:: test_wall_create;
+    "wall_draw" >:: test_wall_draw;
+    "wall_dora_indicator" >:: test_wall_dora_indicator;
+    "dora_of_indicator" >:: test_dora_of_indicator;
+    "player_create" >:: test_player_create;
+    "player_pon" >:: test_player_pon;
+    "game_start" >:: test_game_start;
+    "game_draw_and_discard" >:: test_game_draw_and_discard;
+    "game_advance_turn" >:: test_game_advance_turn;
+    "jikaze_assignment" >:: test_jikaze_assignment;
   ]
 
 let () = run_test_tt_main suite
