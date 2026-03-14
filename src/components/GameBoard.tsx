@@ -43,6 +43,9 @@ export function GameBoard({ onBack }: GameBoardProps) {
         if (drawn.current_turn === HUMAN_SEAT) {
           setMessage('牌を選んで捨ててください');
           setTenpaiTiles(getTenpaiTiles());
+        } else {
+          // CPUの最初のターン
+          processTurn(drawn);
         }
       }
     }, 300);
