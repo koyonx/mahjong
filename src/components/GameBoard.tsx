@@ -5,6 +5,7 @@ import {
   checkTsumoAgari, checkRon, getTenpaiTiles, nextRound,
   declareRiichi, aiDecide, kazeToJa,
   canPon, doPon, canChi, doChi,
+  canMinkan, doMinkan, canAnkan, doAnkan, canKakan, doKakan,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
@@ -26,7 +27,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [agariWinner, setAgariWinner] = useState<string>('');
   const [tenpaiTiles, setTenpaiTiles] = useState<Tile[]>([]);
   const [message, setMessage] = useState<string>('');
-  const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][] } | null>(null);
+  const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][]; canMinkan: boolean } | null>(null);
 
   const handleStart = useCallback(() => {
     const newState = startGame();
@@ -79,15 +80,16 @@ export function GameBoard({ onBack }: GameBoardProps) {
       }
     }
 
-    // 人間(seat 0)のポン・チー判定
+    // 人間(seat 0)のポン・チー・明槓判定
     const HUMAN = 0;
     if (currentState.current_turn !== HUMAN) {
       const ponAvail = canPon(HUMAN);
       const chiOptions = canChi(HUMAN);
-      if (ponAvail || chiOptions.length > 0) {
-        setCallInfo({ canPon: ponAvail, chiOptions });
+      const minkanAvail = canMinkan(HUMAN);
+      if (ponAvail || chiOptions.length > 0 || minkanAvail) {
+        setCallInfo({ canPon: ponAvail, chiOptions, canMinkan: minkanAvail });
         setMessage('鳴きますか？');
-        return; // ユーザーの選択を待つ
+        return;
       }
     }
 
@@ -161,6 +163,56 @@ export function GameBoard({ onBack }: GameBoardProps) {
     }
   }, []);
 
+  const handleMinkan = useCallback(() => {
+    const newState = doMinkan(HUMAN_SEAT);
+    if (newState) {
+      setState(newState);
+      setCallInfo(null);
+      setMessage('カン！');
+      // カン後はツモ（嶺上牌）
+      setTimeout(() => {
+        const drawn = drawTile();
+        if (drawn) {
+          setState(drawn);
+          setMessage('牌を捨ててください');
+          setTenpaiTiles(getTenpaiTiles());
+        }
+      }, 300);
+    }
+  }, []);
+
+  const handleAnkan = useCallback((tile: Tile) => {
+    const newState = doAnkan(HUMAN_SEAT, tile);
+    if (newState) {
+      setState(newState);
+      setMessage('暗槓！');
+      setTimeout(() => {
+        const drawn = drawTile();
+        if (drawn) {
+          setState(drawn);
+          setMessage('牌を捨ててください');
+          setTenpaiTiles(getTenpaiTiles());
+        }
+      }, 300);
+    }
+  }, []);
+
+  const handleKakan = useCallback((tile: Tile) => {
+    const newState = doKakan(HUMAN_SEAT, tile);
+    if (newState) {
+      setState(newState);
+      setMessage('加槓！');
+      setTimeout(() => {
+        const drawn = drawTile();
+        if (drawn) {
+          setState(drawn);
+          setMessage('牌を捨ててください');
+          setTenpaiTiles(getTenpaiTiles());
+        }
+      }, 300);
+    }
+  }, []);
+
   const handleSkipCall = useCallback(() => {
     setCallInfo(null);
     setMessage('');
@@ -224,6 +276,9 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
   const topSeat = 2, rightSeat = 3, leftSeat = 1;
   const canTsumo = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT && checkTsumoAgari() !== null;
+  const isMyTurn = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT;
+  const ankanTiles = isMyTurn ? canAnkan(HUMAN_SEAT) : [];
+  const kakanTiles = isMyTurn ? canKakan(HUMAN_SEAT) : [];
 
   return (
     <div style={{
@@ -307,6 +362,24 @@ export function GameBoard({ onBack }: GameBoardProps) {
               color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
               boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
             }}>ツモ</button>
+          )}
+          {ankanTiles.map((t, i) => (
+            <button key={`ankan-${i}`} onClick={() => handleAnkan(t)} style={{
+              padding: '8px 24px', background: '#5a3a8a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>暗槓</button>
+          ))}
+          {kakanTiles.map((t, i) => (
+            <button key={`kakan-${i}`} onClick={() => handleKakan(t)} style={{
+              padding: '8px 24px', background: '#8a5a2a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>加槓</button>
+          ))}
+          {callInfo?.canMinkan && (
+            <button onClick={handleMinkan} style={{
+              padding: '8px 24px', background: '#8a5a2a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>カン</button>
           )}
           {callInfo?.canPon && (
             <button onClick={handlePon} style={{

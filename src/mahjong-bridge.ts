@@ -149,6 +149,32 @@ export function doChi(seat: number, t1: Tile, t2: Tile): GameState | null {
   return parse<GameState>(mahjongJs.do_chi(seat, t1.kind, t1.suit, t1.number, t2.kind, t2.suit, t2.number));
 }
 
+// === カン ===
+
+export function canMinkan(seat: number): boolean {
+  return mahjongJs.can_minkan(seat);
+}
+
+export function doMinkan(seat: number): GameState | null {
+  return parse<GameState>(mahjongJs.do_minkan(seat));
+}
+
+export function canAnkan(seat: number): Tile[] {
+  try { return JSON.parse(mahjongJs.can_ankan(seat)) as Tile[]; } catch { return []; }
+}
+
+export function doAnkan(seat: number, tile: Tile): GameState | null {
+  return parse<GameState>(mahjongJs.do_ankan(seat, tile.kind, tile.suit, tile.number));
+}
+
+export function canKakan(seat: number): Tile[] {
+  try { return JSON.parse(mahjongJs.can_kakan(seat)) as Tile[]; } catch { return []; }
+}
+
+export function doKakan(seat: number, tile: Tile): GameState | null {
+  return parse<GameState>(mahjongJs.do_kakan(seat, tile.kind, tile.suit, tile.number));
+}
+
 // === AI ===
 
 export interface AiAction {

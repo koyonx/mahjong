@@ -341,6 +341,112 @@ let do_chi seat t1_kind t1_suit t1_num t2_kind t2_suit t2_num : string =
         game_state_to_json new_game
       | Error _ -> json_null
 
+(** 明槓可否判定 *)
+let can_minkan seat : bool =
+  match !game_ref with
+  | None -> false
+  | Some game ->
+    match game.last_discard with
+    | None -> false
+    | Some tile ->
+      let player = game.players.(seat) in
+      let count = List.length (List.filter (fun t -> Tile.compare t tile = 0) player.hand.tiles) in
+      count >= 3
+
+(** 明槓実行 *)
+let do_minkan seat : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    match game.last_discard with
+    | None -> json_null
+    | Some tile ->
+      let player = game.players.(seat) in
+      match Player.minkan tile player with
+      | Ok new_player ->
+        let players = Array.copy game.players in
+        players.(seat) <- new_player;
+        let new_game = { game with
+          players; current_turn = seat;
+          phase = Game.WaitingDraw;
+          last_discard = None; last_discard_player = None;
+        } in
+        game_ref := Some new_game;
+        game_state_to_json new_game
+      | Error _ -> json_null
+
+(** 暗槓可否判定: 手牌に4枚同じ牌があるか *)
+let can_ankan seat : string =
+  match !game_ref with
+  | None -> json_arr []
+  | Some game ->
+    let player = game.players.(seat) in
+    let tiles = player.hand.tiles in
+    let seen = ref [] in
+    let results = ref [] in
+    List.iter (fun t ->
+      if not (List.exists (fun s -> Tile.compare s t = 0) !seen) then begin
+        seen := t :: !seen;
+        let count = List.length (List.filter (fun x -> Tile.compare x t = 0) tiles) in
+        if count >= 4 then results := tile_to_json t :: !results
+      end
+    ) tiles;
+    json_arr !results
+
+(** 暗槓実行 *)
+let do_ankan seat kind suit number : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    let tile = tile_of_kind_suit_number kind suit number in
+    let player = game.players.(seat) in
+    match Player.ankan tile player with
+    | Ok new_player ->
+      let players = Array.copy game.players in
+      players.(seat) <- new_player;
+      let new_game = { game with
+        players; current_turn = seat;
+        phase = Game.WaitingDraw;
+      } in
+      game_ref := Some new_game;
+      game_state_to_json new_game
+    | Error _ -> json_null
+
+(** 加槓可否判定: ポン済み牌の4枚目を持っているか *)
+let can_kakan seat : string =
+  match !game_ref with
+  | None -> json_arr []
+  | Some game ->
+    let player = game.players.(seat) in
+    let results = ref [] in
+    List.iter (fun f ->
+      match f with
+      | Player.Pon t ->
+        if List.exists (fun x -> Tile.compare x t = 0) player.hand.tiles then
+          results := tile_to_json t :: !results
+      | _ -> ()
+    ) player.furo_list;
+    json_arr !results
+
+(** 加槓実行 *)
+let do_kakan seat kind suit number : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    let tile = tile_of_kind_suit_number kind suit number in
+    let player = game.players.(seat) in
+    match Player.kakan tile player with
+    | Ok new_player ->
+      let players = Array.copy game.players in
+      players.(seat) <- new_player;
+      let new_game = { game with
+        players; current_turn = seat;
+        phase = Game.WaitingDraw;
+      } in
+      game_ref := Some new_game;
+      game_state_to_json new_game
+    | Error _ -> json_null
+
 (** CPU AI の行動を決定 *)
 let ai_decide seat : string =
   match !game_ref with
