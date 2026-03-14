@@ -7,7 +7,7 @@ import { useMultiplayer } from './hooks/useMultiplayer';
 
 type Mode = 'menu' | 'single' | 'multi';
 
-function SinglePlayerApp() {
+function SinglePlayerApp({ onBack }: { onBack: () => void }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,11 +36,16 @@ function SinglePlayerApp() {
     );
   }
 
-  return <GameBoard />;
+  return <GameBoard onBack={onBack} />;
 }
 
-function MultiplayerApp() {
+function MultiplayerApp({ onBack }: { onBack: () => void }) {
   const mp = useMultiplayer();
+
+  const handleLeave = () => {
+    mp.leaveRoom();
+    onBack();
+  };
 
   if (!mp.gameState) {
     return (
@@ -53,7 +58,7 @@ function MultiplayerApp() {
         onCreateRoom={mp.createRoom}
         onJoinRoom={mp.joinRoom}
         onStartGame={mp.startGame}
-        onLeaveRoom={mp.leaveRoom}
+        onLeaveRoom={mp.roomId ? mp.leaveRoom : onBack}
       />
     );
   }
@@ -70,6 +75,7 @@ function MultiplayerApp() {
       onTsumo={mp.tsumo}
       onRiichi={mp.riichi}
       onAgariClose={mp.clearAgari}
+      onLeaveRoom={handleLeave}
     />
   );
 }
@@ -77,8 +83,8 @@ function MultiplayerApp() {
 function App() {
   const [mode, setMode] = useState<Mode>('menu');
 
-  if (mode === 'single') return <SinglePlayerApp />;
-  if (mode === 'multi') return <MultiplayerApp />;
+  if (mode === 'single') return <SinglePlayerApp onBack={() => setMode('menu')} />;
+  if (mode === 'multi') return <MultiplayerApp onBack={() => setMode('menu')} />;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-8">
