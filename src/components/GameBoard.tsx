@@ -199,34 +199,40 @@ export function GameBoard({ onBack }: GameBoardProps) {
       )}
 
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-        {/* 対面 */}
-        <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <PlayerHand player={state.players[topSeat]} isCurrentTurn={state.current_turn === topSeat} isHuman={false} />
+        {/* 対面（上）: 手牌は横 */}
+        <div style={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)' }}>
+          <PlayerHand player={state.players[topSeat]} isCurrentTurn={state.current_turn === topSeat} isHuman={false} compact />
+        </div>
+
+        {/* 左: 手牌は縦 */}
+        <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)' }}>
+          <PlayerHand player={state.players[leftSeat]} isCurrentTurn={state.current_turn === leftSeat} isHuman={false} compact vertical />
+        </div>
+
+        {/* 右: 手牌は縦 */}
+        <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)' }}>
+          <PlayerHand player={state.players[rightSeat]} isCurrentTurn={state.current_turn === rightSeat} isHuman={false} compact vertical />
+        </div>
+
+        {/* 中央: パネル + 四方の捨て牌 */}
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        }}>
           <Kawa tiles={state.players[topSeat].kawa} />
-        </div>
-
-        {/* 左 */}
-        <div style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <PlayerHand player={state.players[leftSeat]} isCurrentTurn={state.current_turn === leftSeat} isHuman={false} />
-          <Kawa tiles={state.players[leftSeat].kawa} />
-        </div>
-
-        {/* 右 */}
-        <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <PlayerHand player={state.players[rightSeat]} isCurrentTurn={state.current_turn === rightSeat} isHuman={false} />
-          <Kawa tiles={state.players[rightSeat].kawa} />
-        </div>
-
-        {/* 中央パネル */}
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
-          <CenterPanel state={state} mySeat={HUMAN_SEAT} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Kawa tiles={state.players[leftSeat].kawa} direction="vertical" />
+            <CenterPanel state={state} mySeat={HUMAN_SEAT} />
+            <Kawa tiles={state.players[rightSeat].kawa} direction="vertical" />
+          </div>
+          <Kawa tiles={state.players[HUMAN_SEAT].kawa} />
         </div>
       </div>
 
       {/* 自分 */}
       <div style={{ flexShrink: 0, padding: '8px 16px 12px', background: 'linear-gradient(0deg, rgba(0,0,0,0.4), transparent)' }}>
-        <Kawa tiles={state.players[HUMAN_SEAT].kawa} />
-        <div style={{ marginTop: 8 }}>
+        <div>
           <PlayerHand
             player={state.players[HUMAN_SEAT]}
             isCurrentTurn={state.current_turn === HUMAN_SEAT}

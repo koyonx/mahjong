@@ -10,6 +10,7 @@ interface PlayerHandProps {
   selectedTile?: number | null;
   onSelectTile?: (index: number) => void;
   compact?: boolean;
+  vertical?: boolean;
 }
 
 function FuroGroup({ furo }: { furo: Furo }) {
@@ -34,6 +35,7 @@ export function PlayerHand({
   selectedTile,
   onSelectTile,
   compact,
+  vertical,
 }: PlayerHandProps) {
   const handTiles = player.hand ?? [];
   const tsumoTile = player.tsumo;
@@ -66,16 +68,31 @@ export function PlayerHand({
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0, justifyContent: 'center' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: vertical ? 'column' : 'row',
+        alignItems: vertical ? 'center' : 'flex-end',
+        gap: 0,
+        justifyContent: 'center',
+      }}>
         {/* 副露 */}
         {furoList.length > 0 && (
-          <div style={{ display: 'flex', gap: 4, marginRight: 8 }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: vertical ? 'column' : 'row',
+            gap: 4,
+            ...(vertical ? { marginBottom: 8 } : { marginRight: 8 }),
+          }}>
             {furoList.map((f, i) => <FuroGroup key={i} furo={f} />)}
           </div>
         )}
 
         {/* メイン手牌（ソート済み） */}
-        <div style={{ display: 'flex', gap: 2 }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: vertical ? 'column' : 'row',
+          gap: vertical ? 1 : 2,
+        }}>
           {isHuman ? (
             handTiles.map((tile, i) => (
               <div

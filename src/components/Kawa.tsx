@@ -3,11 +3,27 @@ import { TileView } from './TileView';
 
 interface KawaProps {
   tiles: Tile[];
+  /** 'horizontal' = 6列横並び（自分・対面）, 'vertical' = 3列縦並び（左右） */
+  direction?: 'horizontal' | 'vertical';
 }
 
-/** 捨て牌を6列のグリッドで表示（実際の麻雀卓と同じ） */
-export function Kawa({ tiles }: KawaProps) {
+export function Kawa({ tiles, direction = 'horizontal' }: KawaProps) {
   if (tiles.length === 0) return null;
+
+  if (direction === 'vertical') {
+    return (
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, auto)',
+        gap: 2,
+        justifyContent: 'center',
+      }}>
+        {tiles.map((tile, i) => (
+          <TileView key={i} tile={tile} small />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div style={{
