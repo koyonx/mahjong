@@ -121,7 +121,7 @@ export function PlayerHand({
           ) : (
             // 他プレイヤー: 裏面表示
             Array.from({ length: player.hand_count ?? (handTiles.length + (tsumoTile ? 1 : 0)) }, (_, i) => (
-              <TileView key={i} tile={{ kind: 'jihai', suit: 'kaze', number: 1, label: '' }} faceDown small={compact} />
+              <TileView key={i} tile={{ kind: 'jihai', suit: 'kaze', number: 1, label: '' }} faceDown small={compact} rotated={vertical} />
             ))
           )}
         </div>

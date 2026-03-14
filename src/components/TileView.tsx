@@ -6,6 +6,7 @@ interface TileViewProps {
   selected?: boolean;
   small?: boolean;
   faceDown?: boolean;
+  rotated?: boolean;
 }
 
 const SERIF_FONT = '"Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", serif';
@@ -128,16 +129,21 @@ function renderTileFace(tile: Tile, big: boolean) {
   );
 }
 
-export function TileView({ tile, onClick, selected, small, faceDown }: TileViewProps) {
+export function TileView({ tile, onClick, selected, small, faceDown, rotated }: TileViewProps) {
   const w = small ? 28 : 44;
   const h = small ? 38 : 60;
   const depth = small ? 3 : 5;
 
+  // rotated: 外側のサイズを幅↔高さ入れ替え
+  const outerW = rotated ? h : w;
+  const outerH = rotated ? w : h;
+
   if (faceDown) {
     return (
-      <div style={{ width: w, height: h, flexShrink: 0 }}>
+      <div style={{ width: outerW, height: outerH, flexShrink: 0 }}>
         <div style={{
           width: w, height: h, borderRadius: 3,
+          transform: rotated ? `rotate(90deg) translate(${(h - w) / 2}px, ${(h - w) / 2}px)` : undefined,
           background: 'linear-gradient(160deg, #d4933a 0%, #b87a2a 50%, #a06820 100%)',
           border: '1px solid #8a5a1a',
           boxShadow: `0 ${depth}px 0 #6a4a15, 0 ${depth + 2}px 4px rgba(0,0,0,0.3)`,
@@ -153,7 +159,7 @@ export function TileView({ tile, onClick, selected, small, faceDown }: TileViewP
     <div
       onClick={onClick}
       style={{
-        width: w, height: h, flexShrink: 0,
+        width: outerW, height: outerH, flexShrink: 0,
         transform: selected ? 'translateY(-10px)' : undefined,
         transition: 'transform 0.12s',
         cursor: onClick ? 'pointer' : undefined,
@@ -163,6 +169,7 @@ export function TileView({ tile, onClick, selected, small, faceDown }: TileViewP
     >
       <div style={{
         width: w, height: h, borderRadius: 3,
+        transform: rotated ? `rotate(90deg) translate(${(h - w) / 2}px, ${(h - w) / 2}px)` : undefined,
         background: 'linear-gradient(175deg, #fefcf7 0%, #f0ead8 60%, #e4dcc8 100%)',
         border: selected ? '2px solid #eab308' : '1px solid #c0b8a8',
         boxShadow: selected
