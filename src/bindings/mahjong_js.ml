@@ -214,3 +214,16 @@ let next_round oya_won : string =
     let new_game = Game.next_round game oya_won in
     game_ref := Some new_game;
     game_state_to_json new_game
+
+(** CPU AI の行動を決定 *)
+let ai_decide seat : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    let player = game.players.(seat) in
+    match Ai.decide player game.bakaze with
+    | Ai.TsumoAgari -> json_obj [("action", json_str "tsumo")]
+    | Ai.Discard tile ->
+      json_obj [("action", json_str "discard"); ("tile", tile_to_json tile)]
+    | Ai.DeclareRiichi tile ->
+      json_obj [("action", json_str "riichi"); ("tile", tile_to_json tile)]

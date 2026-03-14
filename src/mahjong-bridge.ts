@@ -116,6 +116,17 @@ export function nextRound(oyaWon: boolean): GameState | null {
   return parse<GameState>(mahjongJs.next_round(oyaWon));
 }
 
+// === AI ===
+
+export interface AiAction {
+  action: 'tsumo' | 'discard' | 'riichi';
+  tile?: Tile;
+}
+
+export function aiDecide(seat: number): AiAction | null {
+  return parse<AiAction>(mahjongJs.ai_decide(seat));
+}
+
 // === ユーティリティ ===
 
 /** 風の日本語名 */

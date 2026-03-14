@@ -313,6 +313,43 @@ let test_jikaze_assignment _ =
   assert_equal Tile.Pei (Game.jikaze_of_seat 2 0);
   assert_equal Tile.Ton (Game.jikaze_of_seat 2 1)
 
+(* === AI tests === *)
+
+let test_ai_discard _ =
+  (* AI が手牌から牌を選択して返すことを確認 *)
+  let hand = Hand.make [m 1; m 2; m 3; p 5; p 6; p 7; s 1; s 3; s 5;
+                         s 7; s 9; ton; haku; hatsu] in
+  let player = { (Player.create Tile.Ton) with hand } in
+  let action = Ai.decide player Tile.Ton in
+  match action with
+  | Ai.Discard tile ->
+    assert_bool "discarded tile should be in hand"
+      (List.exists (fun t -> Tile.compare t tile = 0) hand.tiles)
+  | Ai.TsumoAgari -> () (* 万が一和了ならOK *)
+  | Ai.DeclareRiichi tile ->
+    assert_bool "riichi tile should be in hand"
+      (List.exists (fun t -> Tile.compare t tile = 0) hand.tiles)
+
+let test_ai_prefers_isolated _ =
+  (* 孤立牌を優先的に捨てる *)
+  let hand_tiles = [m 1; m 2; m 3; p 4; p 5; p 6; s 7; s 8; s 9;
+                     m 5; m 5; m 5; ton; haku] in
+  let discard = Ai.choose_discard hand_tiles in
+  (* ton か haku が孤立牌として選ばれるはず *)
+  let is_jihai = match discard with Tile.Jihai _ -> true | _ -> false in
+  assert_bool "should discard isolated jihai" is_jihai
+
+let test_ai_tsumo_agari _ =
+  (* ツモ和了可能な手ではツモ和了を選択 *)
+  let tiles = [m 1; m 2; m 3; m 4; m 5; m 6; m 7; m 8; m 9;
+               p 1; p 2; p 3; s 5; s 5] in
+  let hand = { Hand.tiles = List.sort Tile.compare tiles; tsumo = Some (s 5) } in
+  let player = { (Player.create Tile.Ton) with hand } in
+  let action = Ai.decide player Tile.Ton in
+  match action with
+  | Ai.TsumoAgari -> ()
+  | _ -> assert_failure "should choose tsumo agari"
+
 (* === Test suite === *)
 
 let suite =
@@ -352,6 +389,9 @@ let suite =
     "game_draw_and_discard" >:: test_game_draw_and_discard;
     "game_advance_turn" >:: test_game_advance_turn;
     "jikaze_assignment" >:: test_jikaze_assignment;
+    "ai_discard" >:: test_ai_discard;
+    "ai_prefers_isolated" >:: test_ai_prefers_isolated;
+    "ai_tsumo_agari" >:: test_ai_tsumo_agari;
   ]
 
 let () = run_test_tt_main suite
