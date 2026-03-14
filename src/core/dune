@@ -1,4 +1,3 @@
 (library
  (name mahjong_core)
- (modes melange byte)
- (libraries melange))
+ (modes melange byte native))
