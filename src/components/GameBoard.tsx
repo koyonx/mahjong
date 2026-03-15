@@ -12,6 +12,7 @@ import { Kawa } from './Kawa';
 import { CenterPanel } from './CenterPanel';
 import { DoraDisplay } from './DoraDisplay';
 import { AgariDialog } from './AgariDialog';
+import { ScoreTransition } from './ScoreTransition';
 import { TileView } from './TileView';
 
 const HUMAN_SEAT = 0;
@@ -30,6 +31,12 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][]; canMinkan: boolean; canRon: boolean } | null>(null);
   const [riichiMode, setRiichiMode] = useState(false);
   const [chiSelectMode, setChiSelectMode] = useState(false);
+  const [scoreTransition, setScoreTransition] = useState<{
+    before: { jikaze: string; score: number }[];
+    after: { jikaze: string; score: number }[];
+    reason: string;
+    oyaWon: boolean;
+  } | null>(null);
 
   const handleStart = useCallback(() => {
     const newState = startGame();
@@ -114,9 +121,29 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
   const [lastAgariWasDealerWin, setLastAgariWasDealerWin] = useState(false);
 
-  const advanceToNextRound = useCallback((oyaWon = false) => {
+  /** 点数移行を表示した後に次の局へ */
+  const showScoreAndAdvance = useCallback((reason: string, oyaWon: boolean) => {
+    if (!state) return;
+    const before = state.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
     const next = nextRound(oyaWon);
     if (!next) return;
+    const after = next.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
+
+    // 点数変動があるか確認
+    const hasChange = before.some((b, i) => b.score !== after[i]?.score);
+    if (hasChange) {
+      setScoreTransition({ before, after, reason, oyaWon });
+      // 2秒後に自動で閉じて次の局へ
+      setTimeout(() => {
+        setScoreTransition(null);
+        startNextRound(next);
+      }, 2500);
+    } else {
+      startNextRound(next);
+    }
+  }, [state]);
+
+  const startNextRound = useCallback((next: GameState) => {
     setState(next);
     if (next.phase === 'game_end') {
       setMessage('ゲーム終了');
@@ -140,7 +167,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
         setMessage('ゲーム終了');
       } else {
         setMessage('流局');
-        setTimeout(() => advanceToNextRound(), 2000);
+        setTimeout(() => showScoreAndAdvance('流局', false), 2000);
       }
       return;
     }
@@ -187,14 +214,14 @@ export function GameBoard({ onBack }: GameBoardProps) {
         setMessage('ゲーム終了');
       } else {
         setMessage('流局');
-        setTimeout(() => advanceToNextRound(), 2000);
+        setTimeout(() => showScoreAndAdvance('流局', false), 2000);
       }
       return;
     }
     const drawn = drawTile();
     if (!drawn) {
       setMessage('流局');
-      setTimeout(() => advanceToNextRound(), 2000);
+      setTimeout(() => showScoreAndAdvance('流局', false), 2000);
       return;
     }
     handleTurnAfterDraw(drawn);
@@ -293,9 +320,9 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
   const handleAgariClose = useCallback(() => {
     setAgariResult(null);
-    advanceToNextRound(lastAgariWasDealerWin);
+    showScoreAndAdvance('和了', lastAgariWasDealerWin);
     setLastAgariWasDealerWin(false);
-  }, [advanceToNextRound, lastAgariWasDealerWin]);
+  }, [showScoreAndAdvance, lastAgariWasDealerWin]);
 
   const handleTsumo = useCallback(() => {
     const result = checkTsumoAgari();
@@ -501,6 +528,14 @@ export function GameBoard({ onBack }: GameBoardProps) {
       </div>
 
       {agariResult && <AgariDialog result={agariResult} winnerName={agariWinner} onClose={handleAgariClose} />}
+
+      {scoreTransition && (
+        <ScoreTransition
+          beforeScores={scoreTransition.before}
+          afterScores={scoreTransition.after}
+          reason={scoreTransition.reason}
+        />
+      )}
     </div>
   );
 }
