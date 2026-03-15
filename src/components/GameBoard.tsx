@@ -45,14 +45,22 @@ export function GameBoard({ onBack }: GameBoardProps) {
     }, 300);
   }, []);
 
+  const handleRiichi = useCallback(() => {
+    setRiichiMode(true);
+    setMessage('リーチ！ 捨てる牌を選んでください');
+  }, []);
+
   const handleDiscard = useCallback((tile: Tile) => {
     if (!state || state.phase !== 'waiting_discard') return;
     if (state.current_turn !== HUMAN_SEAT) return;
-    // リーチモード中はリーチ宣言後に打牌
+
     if (riichiMode) {
-      handleRiichiDiscard(tile);
-      return;
+      // リーチ宣言 → 打牌
+      const riichiState = declareRiichi();
+      if (riichiState) setState(riichiState);
+      setRiichiMode(false);
     }
+
     const newState = discardTile(tile);
     if (!newState) return;
     setState(newState);
@@ -60,7 +68,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setTenpaiTiles([]);
     setMessage('');
     setTimeout(() => processAfterDiscard(newState), 300);
-  }, [state, riichiMode, handleRiichiDiscard]);
+  }, [state, riichiMode]);
 
   const continueAfterCalls = useCallback(() => {
     setCallInfo(null);
@@ -256,25 +264,6 @@ export function GameBoard({ onBack }: GameBoardProps) {
       }, 300);
     }
   }, []);
-
-  const handleRiichi = useCallback(() => {
-    setRiichiMode(true);
-    setMessage('リーチ！ 捨てる牌を選んでください');
-  }, []);
-
-  const handleRiichiDiscard = useCallback((tile: Tile) => {
-    const riichiState = declareRiichi();
-    if (riichiState) setState(riichiState);
-    const newState = discardTile(tile);
-    if (newState) {
-      setState(newState);
-      setSelectedTile(null);
-      setTenpaiTiles([]);
-      setRiichiMode(false);
-      setMessage('');
-      setTimeout(() => processAfterDiscard(newState), 300);
-    }
-  }, [processAfterDiscard]);
 
   const handleSkipCall = useCallback(() => {
     setCallInfo(null);
