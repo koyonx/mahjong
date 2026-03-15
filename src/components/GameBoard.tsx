@@ -123,18 +123,17 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [lastAgariWasDealerWin, setLastAgariWasDealerWin] = useState(false);
 
   /** 点数移行を表示した後に次の局へ */
-  const showScoreAndAdvance = useCallback((reason: string, oyaWon: boolean) => {
-    if (!state) return;
-    const before = state.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
+  const showScoreAndAdvance = useCallback((reason: string, oyaWon: boolean, currentState?: GameState) => {
+    const s = currentState ?? state;
+    if (!s) return;
+    const before = s.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
     const next = nextRound(oyaWon);
     if (!next) return;
     const after = next.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
 
-    // 点数変動があるか確認
     const hasChange = before.some((b, i) => b.score !== after[i]?.score);
     if (hasChange) {
       setScoreTransition({ before, after, reason, oyaWon });
-      // 2秒後に自動で閉じて次の局へ
       setTimeout(() => {
         setScoreTransition(null);
         startNextRound(next);
@@ -168,7 +167,8 @@ export function GameBoard({ onBack }: GameBoardProps) {
         setMessage('ゲーム終了');
       } else {
         setMessage('流局');
-        setTimeout(() => showScoreAndAdvance('流局', false), 2000);
+        const ds = drawnState;
+        setTimeout(() => showScoreAndAdvance('流局', false, ds), 2000);
       }
       return;
     }
@@ -215,14 +215,16 @@ export function GameBoard({ onBack }: GameBoardProps) {
         setMessage('ゲーム終了');
       } else {
         setMessage('流局');
-        setTimeout(() => showScoreAndAdvance('流局', false), 2000);
+        const cs = currentState;
+        setTimeout(() => showScoreAndAdvance('流局', false, cs), 2000);
       }
       return;
     }
     const drawn = drawTile();
     if (!drawn) {
       setMessage('流局');
-      setTimeout(() => showScoreAndAdvance('流局', false), 2000);
+      const cs = currentState;
+      setTimeout(() => showScoreAndAdvance('流局', false, cs), 2000);
       return;
     }
     handleTurnAfterDraw(drawn);
