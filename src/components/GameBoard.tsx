@@ -114,6 +114,16 @@ export function GameBoard({ onBack }: GameBoardProps) {
   /** ドロー済みの状態からCPU/人間のターン処理 */
   const handleTurnAfterDraw = useCallback((drawnState: GameState) => {
     setState(drawnState);
+    // 流局チェック
+    if (drawnState.phase === 'round_end' || drawnState.phase === 'game_end') {
+      if (drawnState.phase === 'game_end') {
+        setMessage('ゲーム終了');
+      } else {
+        setMessage('流局');
+        setTimeout(() => advanceToNextRound(), 2000);
+      }
+      return;
+    }
     if (drawnState.current_turn === HUMAN_SEAT) {
       setMessage('牌を選んで捨ててください');
       setTenpaiTiles(getTenpaiTiles());
