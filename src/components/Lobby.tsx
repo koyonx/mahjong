@@ -8,7 +8,7 @@ interface LobbyProps {
   seat: number;
   players: PlayerInfo[];
   error: string | null;
-  onCreateRoom: (name: string) => void;
+  onCreateRoom: (name: string, gameMode: string) => void;
   onJoinRoom: (roomId: string, name: string) => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
@@ -28,6 +28,7 @@ export function Lobby({
   const [playerName, setPlayerName] = useState('');
   const [joinRoomId, setJoinRoomId] = useState('');
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [gameMode, setGameMode] = useState<'hanchan' | 'tonpuu'>('hanchan');
 
   if (!connected) {
     return (
@@ -153,6 +154,31 @@ export function Lobby({
           maxLength={10}
         />
 
+        {mode === 'create' && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setGameMode('hanchan')}
+              className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${
+                gameMode === 'hanchan'
+                  ? 'bg-yellow-500 text-green-950'
+                  : 'bg-green-800 text-green-300 border border-green-600'
+              }`}
+            >
+              半荘戦
+            </button>
+            <button
+              onClick={() => setGameMode('tonpuu')}
+              className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${
+                gameMode === 'tonpuu'
+                  ? 'bg-yellow-500 text-green-950'
+                  : 'bg-green-800 text-green-300 border border-green-600'
+              }`}
+            >
+              東風戦
+            </button>
+          </div>
+        )}
+
         {mode === 'join' && (
           <input
             type="text"
@@ -168,7 +194,7 @@ export function Lobby({
           onClick={() => {
             if (!playerName.trim()) return;
             if (mode === 'create') {
-              onCreateRoom(playerName.trim());
+              onCreateRoom(playerName.trim(), gameMode);
             } else {
               if (!joinRoomId.trim()) return;
               onJoinRoom(joinRoomId.trim(), playerName.trim());

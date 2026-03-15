@@ -1,126 +1,176 @@
 import { useState } from 'react';
 import type { Tile, GameState, AgariResult } from '../mahjong-bridge';
-import { kazeToJa } from '../mahjong-bridge';
 import { TileView } from './TileView';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
-import { GameInfo } from './GameInfo';
+import { CenterPanel } from './CenterPanel';
+import { DoraDisplay } from './DoraDisplay';
 import { AgariDialog } from './AgariDialog';
 
 interface MultiplayerGameBoardProps {
   state: GameState;
   seat: number;
   turnInfo: { canTsumo: boolean; canRiichi: boolean; tenpaiTiles: Tile[] } | null;
+  callInfo: { canPon: boolean; chiOptions: Tile[][] } | null;
   agariResult: { result: AgariResult; winnerSeat: number; winnerName: string } | null;
   messages: string[];
   gameEnd: { name: string; score: number }[] | null;
   onDiscard: (tile: Tile) => void;
   onTsumo: () => void;
   onRiichi: (tile: Tile) => void;
+  onPon: () => void;
+  onChi: (tiles: Tile[]) => void;
+  onSkipCall: () => void;
   onAgariClose: () => void;
+  onLeaveRoom: () => void;
 }
 
 export function MultiplayerGameBoard({
   state,
   seat,
   turnInfo,
+  callInfo,
   agariResult,
   messages,
   gameEnd,
   onDiscard,
   onTsumo,
+  onPon,
+  onChi,
+  onSkipCall,
   onAgariClose,
+  onLeaveRoom,
 }: MultiplayerGameBoardProps) {
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
 
   if (gameEnd) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-6">
+      <div className="flex flex-col items-center justify-center min-h-screen gap-6" style={{ background: '#0d1a0f' }}>
         <h1 className="text-4xl font-bold text-amber-300">ゲーム終了</h1>
         <div className="bg-green-800/50 rounded-xl p-6 w-full max-w-md">
           {gameEnd.map((p, i) => (
             <div key={i} className="flex justify-between px-4 py-3 border-b border-green-700 last:border-0">
-              <span className="font-bold">
-                {i === 0 ? '🏆 ' : ''}{p.name}
-              </span>
+              <span className="font-bold">{i === 0 ? '🏆 ' : ''}{p.name}</span>
               <span className="text-amber-300 font-mono">{p.score.toLocaleString()}点</span>
             </div>
           ))}
         </div>
+        <button onClick={onLeaveRoom} className="px-6 py-3 bg-green-700 hover:bg-green-600 text-white font-bold rounded-lg transition">
+          ロビーに戻る
+        </button>
       </div>
     );
   }
 
   const isMyTurn = state.current_turn === seat && state.phase === 'waiting_discard';
-
-  // 自分を基準に相対的な座席配置
-  // 自分(下) → 右(右) → 対面(上) → 左(左)
-  const relativeSeat = (offset: number) => (seat + offset) % 4;
-  const topSeat = relativeSeat(2);   // 対面
-  const rightSeat = relativeSeat(1); // 右
-  const leftSeat = relativeSeat(3);  // 左
-
+  const rel = (offset: number) => (seat + offset) % 4;
+  const topSeat = rel(2);
+  const rightSeat = rel(1);
+  const leftSeat = rel(3);
   const lastMessage = messages[messages.length - 1] ?? '';
 
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
-      <GameInfo state={state} />
-
-      {lastMessage && (
-        <div className="text-center py-2 text-green-200 text-sm">{lastMessage}</div>
+    <div style={{
+      width: '100vw', height: '100vh', overflow: 'hidden',
+      background: 'linear-gradient(180deg, #3a2a1a 0%, #1a2a1a 30%, #0a1a0e 100%)',
+      display: 'flex', flexDirection: 'column', position: 'relative',
+    }}>
+      {/* メニュー */}
+      <button onClick={() => setShowMenu(!showMenu)} style={{
+        position: 'absolute', top: 8, right: 8, zIndex: 30,
+        width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.4)', border: '1px solid #555', borderRadius: 4,
+        color: '#aaa', fontSize: 16, cursor: 'pointer',
+      }}>☰</button>
+      {showMenu && (
+        <div style={{
+          position: 'absolute', top: 44, right: 8, zIndex: 30,
+          background: '#1a1a28', border: '1px solid #444', borderRadius: 6, padding: 4,
+        }}>
+          <button onClick={() => { onLeaveRoom(); setShowMenu(false); }} style={{
+            display: 'block', width: '100%', padding: '8px 16px', textAlign: 'left',
+            color: '#e05050', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13,
+          }}>退出する</button>
+        </div>
       )}
 
-      {/* 対面 */}
-      <div className="flex flex-col items-center gap-2">
-        <PlayerHand
-          player={state.players[topSeat]}
-          isCurrentTurn={state.current_turn === topSeat}
-          isHuman={false}
-        />
-        <Kawa tiles={state.players[topSeat].kawa} />
+      {/* ドラ表示（左上） */}
+      <DoraDisplay indicators={state.dora_indicators ?? []} />
+
+      {lastMessage && (
+        <div style={{ textAlign: 'center', padding: '4px 0', color: '#8a8', fontSize: 12, flexShrink: 0 }}>
+          {lastMessage}
+        </div>
+      )}
+
+      {/* 卓面 */}
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+        {/* === 対面（上）: 手牌は横並び === */}
+        <div style={{
+          position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
+        }}>
+          <PlayerHand player={state.players[topSeat]} isCurrentTurn={state.current_turn === topSeat} isHuman={false} compact />
+        </div>
+
+        {/* === 左プレイヤー: 手牌は縦並び === */}
+        <div style={{
+          position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)',
+        }}>
+          <PlayerHand player={state.players[leftSeat]} isCurrentTurn={state.current_turn === leftSeat} isHuman={false} compact vertical />
+        </div>
+
+        {/* === 右プレイヤー: 手牌は縦並び === */}
+        <div style={{
+          position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+        }}>
+          <PlayerHand player={state.players[rightSeat]} isCurrentTurn={state.current_turn === rightSeat} isHuman={false} compact vertical />
+        </div>
+
+        {/* === 中央エリア: パネル + 四方の捨て牌 === */}
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        }}>
+          {/* 対面の捨て牌（上） */}
+          <Kawa tiles={state.players[topSeat].kawa} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* 左の捨て牌 */}
+            <Kawa tiles={state.players[leftSeat].kawa} direction="vertical" />
+
+            {/* 中央パネル */}
+            <CenterPanel state={state} mySeat={seat} />
+
+            {/* 右の捨て牌 */}
+            <Kawa tiles={state.players[rightSeat].kawa} direction="vertical" />
+          </div>
+
+          {/* 自分の捨て牌（下） */}
+          <Kawa tiles={state.players[seat].kawa} />
+        </div>
       </div>
 
-      {/* 左右 */}
-      <div className="flex justify-between items-start">
-        <div className="flex flex-col items-center gap-2">
-          <PlayerHand
-            player={state.players[leftSeat]}
-            isCurrentTurn={state.current_turn === leftSeat}
-            isHuman={false}
-          />
-          <Kawa tiles={state.players[leftSeat].kawa} />
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <PlayerHand
-            player={state.players[rightSeat]}
-            isCurrentTurn={state.current_turn === rightSeat}
-            isHuman={false}
-          />
-          <Kawa tiles={state.players[rightSeat].kawa} />
-        </div>
-      </div>
-
-      {/* 自分 */}
-      <div className="mt-auto">
-        <Kawa tiles={state.players[seat].kawa} />
-        <div className="mt-2">
+      {/* 自分の領域（下）— 捨て牌は中央エリアに表示済み */}
+      <div style={{
+        flexShrink: 0, padding: '8px 16px 12px',
+        background: 'linear-gradient(0deg, rgba(0,0,0,0.4), transparent)',
+      }}>
+        <div>
           <PlayerHand
             player={state.players[seat]}
             isCurrentTurn={isMyTurn}
             isHuman={true}
-            onDiscard={(tile) => {
-              onDiscard(tile);
-              setSelectedTile(null);
-            }}
+            onDiscard={(tile) => { onDiscard(tile); setSelectedTile(null); }}
             selectedTile={selectedTile}
             onSelectTile={setSelectedTile}
           />
         </div>
 
-        {/* テンパイ表示 */}
         {turnInfo && turnInfo.tenpaiTiles.length > 0 && (
-          <div className="mt-2 flex items-center justify-center gap-2">
-            <span className="text-sm text-green-300">待ち:</span>
+          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#8a8' }}>待ち:</span>
             {turnInfo.tenpaiTiles.map((t, i) => (
               <TileView key={i} tile={t} small />
             ))}
@@ -128,25 +178,37 @@ export function MultiplayerGameBoard({
         )}
 
         {/* アクションボタン */}
-        <div className="flex justify-center gap-3 mt-3">
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
           {isMyTurn && turnInfo?.canTsumo && (
-            <button
-              onClick={onTsumo}
-              className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition"
-            >
-              ツモ
-            </button>
+            <button onClick={onTsumo} style={{
+              padding: '8px 24px', background: '#c41e3a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
+            }}>ツモ</button>
+          )}
+          {callInfo?.canPon && (
+            <button onClick={onPon} style={{
+              padding: '8px 24px', background: '#2a6aaa', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>ポン</button>
+          )}
+          {callInfo && callInfo.chiOptions.length > 0 && callInfo.chiOptions.map((opt, i) => (
+            <button key={i} onClick={() => onChi(opt)} style={{
+              padding: '8px 24px', background: '#2a8a4a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>チー</button>
+          ))}
+          {callInfo && (
+            <button onClick={onSkipCall} style={{
+              padding: '8px 24px', background: '#555', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>スキップ</button>
           )}
         </div>
       </div>
 
-      {/* 和了ダイアログ */}
       {agariResult && (
-        <AgariDialog
-          result={agariResult.result}
-          winnerName={agariResult.winnerName}
-          onClose={onAgariClose}
-        />
+        <AgariDialog result={agariResult.result} winnerName={agariResult.winnerName} onClose={onAgariClose} />
       )}
     </div>
   );

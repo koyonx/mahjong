@@ -1,4 +1,4 @@
-import type { Tile, Player } from '../mahjong-bridge';
+import type { Tile, Player, Furo } from '../mahjong-bridge';
 import { TileView } from './TileView';
 import { kazeToJa } from '../mahjong-bridge';
 
@@ -9,6 +9,22 @@ interface PlayerHandProps {
   onDiscard?: (tile: Tile) => void;
   selectedTile?: number | null;
   onSelectTile?: (index: number) => void;
+  compact?: boolean;
+  vertical?: boolean;
+}
+
+function FuroGroup({ furo }: { furo: Furo }) {
+  return (
+    <div style={{
+      display: 'flex', gap: 1,
+      padding: '0 4px',
+      borderLeft: '2px solid rgba(255,255,255,0.15)',
+    }}>
+      {furo.tiles.map((tile, i) => (
+        <TileView key={i} tile={tile} small />
+      ))}
+    </div>
+  );
 }
 
 export function PlayerHand({
@@ -18,50 +34,119 @@ export function PlayerHand({
   onDiscard,
   selectedTile,
   onSelectTile,
+  compact,
+  vertical,
 }: PlayerHandProps) {
+  const handTiles = player.hand ?? [];
+  const tsumoTile = player.tsumo;
+  const furoList = player.furo ?? [];
+
   return (
-    <div className={`
-      p-3 rounded-lg
-      ${isCurrentTurn ? 'bg-green-800/50 ring-2 ring-yellow-400' : 'bg-green-800/30'}
-    `}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-bold">{kazeToJa(player.jikaze)}</span>
-          {player.is_riichi && (
-            <span className="px-2 py-0.5 bg-red-600 text-white text-xs rounded font-bold">
-              リーチ
-            </span>
-          )}
-          {isHuman && (
-            <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded">
-              あなた
-            </span>
-          )}
-        </div>
-        <span className="text-amber-300 font-mono font-bold">
-          {player.score.toLocaleString()}点
+    <div>
+      {/* プレイヤー情報 */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
+        fontSize: compact ? 11 : 13,
+      }}>
+        <span style={{
+          fontWeight: 700,
+          color: isCurrentTurn ? '#e8c44a' : '#6a8a6a',
+        }}>
+          {kazeToJa(player.jikaze)}
         </span>
+        {player.is_riichi && (
+          <span style={{
+            padding: '1px 5px', background: '#c41e3a', color: '#fff',
+            fontSize: 10, borderRadius: 3, fontWeight: 700,
+          }}>立直</span>
+        )}
+        {isHuman && (
+          <span style={{
+            padding: '1px 5px', background: '#2a5a8a', color: '#fff',
+            fontSize: 10, borderRadius: 3,
+          }}>YOU</span>
+        )}
       </div>
 
-      <div className="flex gap-1 flex-wrap justify-center">
-        {player.hand.map((tile, i) => (
-          <TileView
-            key={i}
-            tile={tile}
-            faceDown={!isHuman}
-            selected={isHuman && selectedTile === i}
-            onClick={isHuman && isCurrentTurn && onSelectTile
-              ? () => {
-                  if (selectedTile === i && onDiscard) {
-                    onDiscard(tile);
-                  } else {
-                    onSelectTile(i);
+      <div style={{
+        display: 'flex',
+        flexDirection: vertical ? 'column' : 'row',
+        alignItems: vertical ? 'center' : 'flex-end',
+        gap: 0,
+        justifyContent: 'center',
+      }}>
+        {/* 副露 */}
+        {furoList.length > 0 && (
+          <div style={{
+            display: 'flex',
+            flexDirection: vertical ? 'column' : 'row',
+            gap: 4,
+            ...(vertical ? { marginBottom: 8 } : { marginRight: 8 }),
+          }}>
+            {furoList.map((f, i) => <FuroGroup key={i} furo={f} />)}
+          </div>
+        )}
+
+        {/* メイン手牌（ソート済み） */}
+        <div style={{
+          display: 'flex',
+          flexDirection: vertical ? 'column' : 'row',
+          gap: vertical ? 1 : 2,
+        }}>
+          {isHuman ? (
+            handTiles.map((tile, i) => (
+              <div
+                key={`${tile.kind}-${tile.suit}-${tile.number}-${i}`}
+                style={{
+                  transition: 'transform 0.3s ease, opacity 0.3s ease',
+                }}
+              >
+                <TileView
+                  tile={tile}
+                  small={compact}
+                  selected={selectedTile === i}
+                  onClick={isCurrentTurn && onSelectTile
+                    ? () => {
+                        if (selectedTile === i && onDiscard) {
+                          onDiscard(tile);
+                        } else {
+                          onSelectTile(i);
+                        }
+                      }
+                    : undefined
                   }
-                }
-              : undefined
-            }
-          />
-        ))}
+                />
+              </div>
+            ))
+          ) : (
+            // 他プレイヤー: 裏面表示
+            Array.from({ length: player.hand_count ?? (handTiles.length + (tsumoTile ? 1 : 0)) }, (_, i) => (
+              <TileView key={i} tile={{ kind: 'jihai', suit: 'kaze', number: 1, label: '' }} faceDown small={compact} rotated={vertical} />
+            ))
+          )}
+        </div>
+
+        {/* ツモ牌（右端に分離） */}
+        {isHuman && tsumoTile && (
+          <div style={{ marginLeft: 12, transition: 'transform 0.3s ease' }}>
+            <TileView
+              tile={tsumoTile}
+              small={compact}
+              selected={selectedTile === handTiles.length}
+              onClick={isCurrentTurn && onSelectTile
+                ? () => {
+                    const tsumoIdx = handTiles.length;
+                    if (selectedTile === tsumoIdx && onDiscard) {
+                      onDiscard(tsumoTile);
+                    } else {
+                      onSelectTile(tsumoIdx);
+                    }
+                  }
+                : undefined
+              }
+            />
+          </div>
+        )}
       </div>
     </div>
   );

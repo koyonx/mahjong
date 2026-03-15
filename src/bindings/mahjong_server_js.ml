@@ -36,8 +36,24 @@ let tile_to_json (tile : Tile.tile) : string =
     json_obj [("kind", json_str "jihai"); ("suit", json_str suit_str);
               ("number", json_int number); ("label", json_str (Tile.to_string tile))]
 
+let yaku_id_of (y : Yaku.yaku) : string =
+  match y with
+  | Yaku.Riichi -> "riichi" | Yaku.Ippatsu -> "ippatsu" | Yaku.Tsumo -> "tsumo"
+  | Yaku.Tanyao -> "tanyao" | Yaku.Pinfu -> "pinfu" | Yaku.Iipeiko -> "iipeiko"
+  | Yaku.Yakuhai _ -> "yakuhai" | Yaku.Chanta -> "chanta" | Yaku.Ittsu -> "ittsu"
+  | Yaku.Sanshoku_doujun -> "sanshoku_doujun" | Yaku.Sanshoku_doukou -> "sanshoku_doukou"
+  | Yaku.Toitoi -> "toitoi" | Yaku.Sanankou -> "sanankou" | Yaku.Honroutou -> "honroutou"
+  | Yaku.Shousangen -> "shousangen" | Yaku.Chiitoitsu -> "chiitoitsu"
+  | Yaku.Honitsu -> "honitsu" | Yaku.Junchan -> "junchan"
+  | Yaku.Ryanpeiko -> "ryanpeiko" | Yaku.Chinitsu -> "chinitsu"
+  | Yaku.Kokushi -> "kokushi" | Yaku.Suuankou -> "suuankou"
+  | Yaku.Daisangen -> "daisangen" | Yaku.Shousuushii -> "shousuushii"
+  | Yaku.Daisuushii -> "daisuushii" | Yaku.Tsuuiisou -> "tsuuiisou"
+  | Yaku.Ryuuiisou -> "ryuuiisou" | Yaku.Chinroutou -> "chinroutou"
+  | Yaku.Chuuren -> "chuuren" | Yaku.Tenhou -> "tenhou" | Yaku.Chiihou -> "chiihou"
+
 let yaku_to_json (y : Yaku.yaku) : string =
-  json_obj [("name", json_str (Yaku.name_of_yaku y)); ("han", json_int (Yaku.han_of_yaku y))]
+  json_obj [("id", json_str (yaku_id_of y)); ("han", json_int (Yaku.han_of_yaku y))]
 
 let payment_to_json (p : Scoring.payment) : string =
   match p with
@@ -50,9 +66,15 @@ let payment_to_json (p : Scoring.payment) : string =
 
 (** プレイヤー状態をJSON変換（手牌を見せるかどうか制御） *)
 let player_to_json (p : Player.t) (show_hand : bool) : string =
-  let hand =
-    if show_hand then json_arr (List.map tile_to_json p.hand.tiles)
-    else json_null
+  let (hand, tsumo_tile) =
+    if show_hand then
+      match p.hand.tsumo with
+      | Some t ->
+        (match Mentsu.remove_one t p.hand.tiles with
+         | Some rest -> (json_arr (List.map tile_to_json (List.sort Tile.compare rest)), tile_to_json t)
+         | None -> (json_arr (List.map tile_to_json (List.sort Tile.compare p.hand.tiles)), json_null))
+      | None -> (json_arr (List.map tile_to_json (List.sort Tile.compare p.hand.tiles)), json_null)
+    else (json_null, json_null)
   in
   let hand_count = json_int (Hand.count p.hand) in
   let kawa = json_arr (List.rev_map tile_to_json p.kawa) in
@@ -61,9 +83,20 @@ let player_to_json (p : Player.t) (show_hand : bool) : string =
     | Tile.Sha -> "sha" | Tile.Pei -> "pei"
     | _ -> "ton"
   in
+  let furo = json_arr (List.map (fun f ->
+    match f with
+    | Player.Chi (t1, t2, t3) ->
+      json_obj [("type", json_str "chi"); ("tiles", json_arr [tile_to_json t1; tile_to_json t2; tile_to_json t3])]
+    | Player.Pon t ->
+      json_obj [("type", json_str "pon"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t])]
+    | Player.Minkan t ->
+      json_obj [("type", json_str "kan"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t; tile_to_json t])]
+    | Player.Ankan t ->
+      json_obj [("type", json_str "ankan"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t; tile_to_json t])]
+  ) p.furo_list) in
   json_obj [
-    ("hand", hand); ("hand_count", hand_count); ("kawa", kawa);
-    ("score", json_int p.score);
+    ("hand", hand); ("tsumo", tsumo_tile); ("hand_count", hand_count);
+    ("furo", furo); ("kawa", kawa); ("score", json_int p.score);
     ("is_riichi", json_bool p.is_riichi);
     ("is_menzen", json_bool (Player.is_menzen p));
     ("jikaze", json_str jikaze_str)
@@ -89,11 +122,13 @@ let game_state_to_json_for_seat (game : Game.round) (viewer_seat : int) : string
   let last_d = match game.last_discard with
     | Some t -> tile_to_json t | None -> json_null
   in
+  let dora = json_arr (List.map tile_to_json (Wall.dora_indicators game.wall game.kan_count)) in
   json_obj [
     ("players", players); ("current_turn", json_int game.current_turn);
     ("phase", json_str phase_str); ("bakaze", json_str bakaze_str);
     ("kyoku", json_int game.kyoku); ("honba", json_int game.honba);
     ("remaining_tiles", json_int (Wall.remaining game.wall));
+    ("dora_indicators", dora);
     ("last_discard", last_d)
   ]
 
@@ -115,11 +150,13 @@ let game_state_to_json_full (game : Game.round) : string =
   let last_d = match game.last_discard with
     | Some t -> tile_to_json t | None -> json_null
   in
+  let dora = json_arr (List.map tile_to_json (Wall.dora_indicators game.wall game.kan_count)) in
   json_obj [
     ("players", players); ("current_turn", json_int game.current_turn);
     ("phase", json_str phase_str); ("bakaze", json_str bakaze_str);
     ("kyoku", json_int game.kyoku); ("honba", json_int game.honba);
     ("remaining_tiles", json_int (Wall.remaining game.wall));
+    ("dora_indicators", dora);
     ("last_discard", last_d)
   ]
 
@@ -214,12 +251,12 @@ let check_tsumo room_id : string =
   | Some game ->
     let player = game.players.(game.current_turn) in
     let ctx = {
-      Yaku.is_tsumo = true; is_riichi = player.is_riichi;
-      is_ippatsu = false; is_tenhou = false; is_chiihou = false;
+      Yaku.is_tsumo = true; is_riichi = player.is_riichi; is_double_riichi = false;
+      is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = 0;
       bakaze = game.bakaze; jikaze = player.jikaze;
     } in
     let is_oya = player.jikaze = Tile.Ton in
-    match Scoring.score_hand player.hand.tiles ctx is_oya with
+    match Scoring.score_hand ~furo_count:(List.length player.furo_list) ~furo_mentsu:player.furo_list player.hand.tiles ctx is_oya with
     | Some result ->
       (match Game.tsumo_agari game with
        | Ok new_game ->
@@ -246,12 +283,12 @@ let check_ron room_id seat : string =
       let player = game.players.(seat) in
       let tiles = tile :: player.hand.tiles in
       let ctx = {
-        Yaku.is_tsumo = false; is_riichi = player.is_riichi;
-        is_ippatsu = false; is_tenhou = false; is_chiihou = false;
+        Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = false;
+        is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = 0;
         bakaze = game.bakaze; jikaze = player.jikaze;
       } in
       let is_oya = player.jikaze = Tile.Ton in
-      (match Scoring.score_hand tiles ctx is_oya with
+      (match Scoring.score_hand ~furo_count:(List.length player.furo_list) ~furo_mentsu:player.furo_list tiles ctx is_oya with
        | Some result ->
          (match Game.ron game seat with
           | Ok new_game ->
@@ -296,6 +333,113 @@ let get_tenpai room_id : string =
   | Some game ->
     let player = game.players.(game.current_turn) in
     json_arr (List.map tile_to_json (Hand.tenpai_tiles player.hand))
+
+(** ポン可否判定（副作用なし） *)
+let can_pon room_id seat : bool =
+  match Hashtbl.find_opt rooms room_id with
+  | None -> false
+  | Some game ->
+    match game.last_discard with
+    | None -> false
+    | Some tile ->
+      let player = game.players.(seat) in
+      let count = List.length (List.filter (fun t -> Tile.compare t tile = 0) player.hand.tiles) in
+      count >= 2
+
+(** ポン実行 *)
+let do_pon room_id seat : string =
+  match Hashtbl.find_opt rooms room_id with
+  | None -> json_null
+  | Some game ->
+    match game.last_discard with
+    | None -> json_null
+    | Some tile ->
+      let player = game.players.(seat) in
+      match Player.pon tile player with
+      | Ok new_player ->
+        let players = Array.copy game.players in
+        players.(seat) <- new_player;
+        let new_game = { game with
+          players;
+          current_turn = seat;
+          phase = Game.WaitingDiscard;
+          last_discard = None;
+          last_discard_player = None;
+        } in
+        Hashtbl.replace rooms room_id new_game;
+        json_obj [("ok", json_bool true)]
+      | Error _ -> json_null
+
+(** チー可否判定: 上家からのみ *)
+let can_chi room_id seat : string =
+  match Hashtbl.find_opt rooms room_id with
+  | None -> json_arr []
+  | Some game ->
+    match game.last_discard with
+    | None -> json_arr []
+    | Some tile ->
+      match game.last_discard_player with
+      | None -> json_arr []
+      | Some discarder ->
+        if (discarder + 1) mod 4 <> seat then json_arr []
+        else
+          let player = game.players.(seat) in
+          let hand = player.hand.tiles in
+          let results = ref [] in
+          (match tile with
+           | Tile.Suhai (suit, n) ->
+             (* n-2, n-1, tile *)
+             if n >= 3 then begin
+               let t1 = Tile.Suhai (suit, n - 2) in
+               let t2 = Tile.Suhai (suit, n - 1) in
+               if List.exists (fun t -> Tile.compare t t1 = 0) hand &&
+                  List.exists (fun t -> Tile.compare t t2 = 0) hand then
+                 results := json_arr [tile_to_json t1; tile_to_json t2] :: !results
+             end;
+             (* n-1, tile, n+1 *)
+             if n >= 2 && n <= 8 then begin
+               let t1 = Tile.Suhai (suit, n - 1) in
+               let t2 = Tile.Suhai (suit, n + 1) in
+               if List.exists (fun t -> Tile.compare t t1 = 0) hand &&
+                  List.exists (fun t -> Tile.compare t t2 = 0) hand then
+                 results := json_arr [tile_to_json t1; tile_to_json t2] :: !results
+             end;
+             (* tile, n+1, n+2 *)
+             if n <= 7 then begin
+               let t1 = Tile.Suhai (suit, n + 1) in
+               let t2 = Tile.Suhai (suit, n + 2) in
+               if List.exists (fun t -> Tile.compare t t1 = 0) hand &&
+                  List.exists (fun t -> Tile.compare t t2 = 0) hand then
+                 results := json_arr [tile_to_json t1; tile_to_json t2] :: !results
+             end
+           | _ -> ());
+          json_arr !results
+
+(** チー実行 *)
+let do_chi room_id seat t1_kind t1_suit t1_num t2_kind t2_suit t2_num : string =
+  match Hashtbl.find_opt rooms room_id with
+  | None -> json_null
+  | Some game ->
+    match game.last_discard with
+    | None -> json_null
+    | Some taken ->
+      let t1 = tile_of_kind_suit_number t1_kind t1_suit t1_num in
+      let t2 = tile_of_kind_suit_number t2_kind t2_suit t2_num in
+      let player = game.players.(seat) in
+      match Player.chi t1 t2 taken player with
+      | Ok new_player ->
+        let players = Array.copy game.players in
+        players.(seat) <- new_player;
+        let new_game = { game with
+          players;
+          current_turn = seat;
+          phase = Game.WaitingDiscard;
+          last_discard = None;
+          last_discard_player = None;
+        } in
+        Hashtbl.replace rooms room_id new_game;
+        json_obj [("ok", json_bool true)]
+      | Error _ -> json_null
 
 let next_round room_id oya_won : string =
   match Hashtbl.find_opt rooms room_id with

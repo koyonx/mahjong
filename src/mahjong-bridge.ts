@@ -10,10 +10,19 @@ export interface Tile {
   suit: 'manzu' | 'pinzu' | 'souzu' | 'kaze' | 'sangen';
   number: number;
   label: string;
+  is_red?: boolean;
+}
+
+export interface Furo {
+  type: 'chi' | 'pon' | 'kan' | 'ankan';
+  tiles: Tile[];
 }
 
 export interface Player {
-  hand: Tile[];
+  hand: Tile[] | null;
+  tsumo: Tile | null;
+  hand_count: number;
+  furo: Furo[];
   kawa: Tile[];
   score: number;
   is_riichi: boolean;
@@ -23,6 +32,8 @@ export interface Player {
 
 export type Phase = 'waiting_draw' | 'waiting_discard' | 'waiting_call' | 'round_end' | 'game_end';
 
+export type GameMode = 'tonpuu' | 'hanchan';
+
 export interface GameState {
   players: Player[];
   current_turn: number;
@@ -31,12 +42,31 @@ export interface GameState {
   kyoku: number;
   honba: number;
   remaining_tiles: number;
+  dora_indicators: Tile[];
   last_discard: Tile | null;
 }
 
 export interface Yaku {
-  name: string;
+  id: string;
   han: number;
+}
+
+const yakuNames: Record<string, string> = {
+  riichi: 'リーチ', ippatsu: '一発', tsumo: '門前清自摸和',
+  tanyao: '断么九', pinfu: '平和', iipeiko: '一盃口',
+  yakuhai: '役牌', chanta: '混全帯么九', ittsu: '一気通貫',
+  sanshoku_doujun: '三色同順', sanshoku_doukou: '三色同刻',
+  toitoi: '対々和', sanankou: '三暗刻', honroutou: '混老頭',
+  shousangen: '小三元', chiitoitsu: '七対子',
+  honitsu: '混一色', junchan: '純全帯么九', ryanpeiko: '二盃口',
+  chinitsu: '清一色', kokushi: '国士無双', suuankou: '四暗刻',
+  daisangen: '大三元', shousuushii: '小四喜', daisuushii: '大四喜',
+  tsuuiisou: '字一色', ryuuiisou: '緑一色', chinroutou: '清老頭',
+  chuuren: '九蓮宝燈', tenhou: '天和', chiihou: '地和',
+};
+
+export function yakuName(id: string): string {
+  return yakuNames[id] ?? id;
 }
 
 export interface Payment {
@@ -53,6 +83,14 @@ export interface AgariResult {
   fu: number;
   total: number;
   payment: Payment;
+  dora: Tile[];
+  uradora: Tile[];
+  dora_count: number;
+  uradora_count: number;
+  aka_count: number;
+  winner_hand: Tile[];
+  agari_tile: Tile | null;
+  is_tsumo: boolean;
 }
 
 // === Melange出力のインポート ===
@@ -100,6 +138,10 @@ export function checkTsumoAgari(): AgariResult | null {
   return parse<AgariResult>(mahjongJs.check_tsumo());
 }
 
+export function canRon(seat: number): boolean {
+  return mahjongJs.can_ron(seat);
+}
+
 export function checkRon(winnerSeat: number): AgariResult | null {
   return parse<AgariResult>(mahjongJs.check_ron(winnerSeat));
 }
@@ -112,8 +154,60 @@ export function getTenpaiTiles(): Tile[] {
   return JSON.parse(mahjongJs.get_tenpai()) as Tile[];
 }
 
+export function canDeclareRiichi(seat: number): boolean {
+  return mahjongJs.can_declare_riichi(seat);
+}
+
 export function nextRound(oyaWon: boolean): GameState | null {
   return parse<GameState>(mahjongJs.next_round(oyaWon));
+}
+
+// === ポン・チー ===
+
+export function canPon(seat: number): boolean {
+  return mahjongJs.can_pon(seat);
+}
+
+export function doPon(seat: number): GameState | null {
+  return parse<GameState>(mahjongJs.do_pon(seat));
+}
+
+export function canChi(seat: number): Tile[][] {
+  try {
+    return JSON.parse(mahjongJs.can_chi(seat)) as Tile[][];
+  } catch {
+    return [];
+  }
+}
+
+export function doChi(seat: number, t1: Tile, t2: Tile): GameState | null {
+  return parse<GameState>(mahjongJs.do_chi(seat, t1.kind, t1.suit, t1.number, t2.kind, t2.suit, t2.number));
+}
+
+// === カン ===
+
+export function canMinkan(seat: number): boolean {
+  return mahjongJs.can_minkan(seat);
+}
+
+export function doMinkan(seat: number): GameState | null {
+  return parse<GameState>(mahjongJs.do_minkan(seat));
+}
+
+export function canAnkan(seat: number): Tile[] {
+  try { return JSON.parse(mahjongJs.can_ankan(seat)) as Tile[]; } catch { return []; }
+}
+
+export function doAnkan(seat: number, tile: Tile): GameState | null {
+  return parse<GameState>(mahjongJs.do_ankan(seat, tile.kind, tile.suit, tile.number));
+}
+
+export function canKakan(seat: number): Tile[] {
+  try { return JSON.parse(mahjongJs.can_kakan(seat)) as Tile[]; } catch { return []; }
+}
+
+export function doKakan(seat: number, tile: Tile): GameState | null {
+  return parse<GameState>(mahjongJs.do_kakan(seat, tile.kind, tile.suit, tile.number));
 }
 
 // === AI ===

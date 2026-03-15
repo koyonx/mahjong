@@ -2,24 +2,42 @@ import { useState, useCallback } from 'react';
 import type { Tile, GameState, AgariResult } from '../mahjong-bridge';
 import {
   startGame, drawTile, discardTile, advanceTurn,
-  checkTsumoAgari, checkRon, getTenpaiTiles, nextRound,
-  declareRiichi, aiDecide, kazeToJa
+  checkTsumoAgari, canRon, checkRon, getTenpaiTiles, nextRound,
+  declareRiichi, aiDecide, kazeToJa,
+  canPon, doPon, canChi, doChi,
+  canMinkan, doMinkan, canAnkan, doAnkan, canKakan, doKakan,
+  canDeclareRiichi,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
-import { GameInfo } from './GameInfo';
+import { CenterPanel } from './CenterPanel';
+import { DoraDisplay } from './DoraDisplay';
 import { AgariDialog } from './AgariDialog';
+import { ScoreTransition } from './ScoreTransition';
 import { TileView } from './TileView';
 
 const HUMAN_SEAT = 0;
 
-export function GameBoard() {
+interface GameBoardProps {
+  onBack?: () => void;
+}
+
+export function GameBoard({ onBack }: GameBoardProps) {
   const [state, setState] = useState<GameState | null>(null);
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
   const [agariResult, setAgariResult] = useState<AgariResult | null>(null);
   const [agariWinner, setAgariWinner] = useState<string>('');
   const [tenpaiTiles, setTenpaiTiles] = useState<Tile[]>([]);
   const [message, setMessage] = useState<string>('');
+  const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][]; canMinkan: boolean; canRon: boolean } | null>(null);
+  const [riichiMode, setRiichiMode] = useState(false);
+  const [chiSelectMode, setChiSelectMode] = useState(false);
+  const [scoreTransition, setScoreTransition] = useState<{
+    before: { jikaze: string; score: number }[];
+    after: { jikaze: string; score: number }[];
+    reason: string;
+    oyaWon: boolean;
+  } | null>(null);
 
   const handleStart = useCallback(() => {
     const newState = startGame();
@@ -28,108 +46,156 @@ export function GameBoard() {
     setAgariResult(null);
     setTenpaiTiles([]);
     setMessage('ゲーム開始！');
-
-    // 最初のツモ
     setTimeout(() => {
       const drawn = drawTile();
       if (drawn) {
-        setState(drawn);
-        if (drawn.current_turn === HUMAN_SEAT) {
-          setMessage('牌を選んで捨ててください');
-          const waits = getTenpaiTiles();
-          setTenpaiTiles(waits);
-        }
+        handleTurnAfterDraw(drawn);
       }
     }, 300);
+  }, []);
+
+  const handleRiichi = useCallback(() => {
+    setRiichiMode(true);
+    setMessage('リーチ！ 捨てる牌を選んでください');
   }, []);
 
   const handleDiscard = useCallback((tile: Tile) => {
     if (!state || state.phase !== 'waiting_discard') return;
     if (state.current_turn !== HUMAN_SEAT) return;
 
+    if (riichiMode) {
+      // リーチ宣言 → 打牌
+      const riichiState = declareRiichi();
+      if (riichiState) setState(riichiState);
+      setRiichiMode(false);
+    }
+
     const newState = discardTile(tile);
     if (!newState) return;
-
     setState(newState);
     setSelectedTile(null);
     setTenpaiTiles([]);
     setMessage('');
-
-    // CPU のロン判定 → 鳴きスキップ → 次の手番
     setTimeout(() => processAfterDiscard(newState), 300);
-  }, [state]);
+  }, [state, riichiMode]);
+
+  const continueAfterCalls = useCallback(() => {
+    setCallInfo(null);
+    const advanced = advanceTurn();
+    if (!advanced) return;
+    processTurn(advanced);
+  }, []);
 
   const processAfterDiscard = useCallback((currentState: GameState) => {
-    // 簡易版: CPUのロン判定
+    // CPUのロン判定（自動）
     for (let i = 0; i < 4; i++) {
       if (i === currentState.current_turn) continue;
+      if (i === HUMAN_SEAT) continue; // 人間は後で選択させる
       const ronResult = checkRon(i);
       if (ronResult) {
         setState(ronResult.state);
         setAgariResult(ronResult);
         setAgariWinner(`${kazeToJa(currentState.players[i].jikaze)}家`);
+        setLastAgariWasDealerWin(currentState.players[i].jikaze === 'ton');
         return;
       }
     }
 
-    // 鳴きなし → 次の手番
+    // 人間のロン・ポン・チー・明槓判定
+    if (currentState.current_turn !== HUMAN_SEAT) {
+      const humanCanRon = canRon(HUMAN_SEAT);
+
+      const ponAvail = canPon(HUMAN_SEAT);
+      const chiOptions = canChi(HUMAN_SEAT);
+      const minkanAvail = canMinkan(HUMAN_SEAT);
+      if (humanCanRon || ponAvail || chiOptions.length > 0 || minkanAvail) {
+        setCallInfo({ canPon: ponAvail, chiOptions, canMinkan: minkanAvail, canRon: humanCanRon });
+        setMessage(humanCanRon ? 'ロンしますか？' : '鳴きますか？');
+        return;
+      }
+    }
+
     const advanced = advanceTurn();
     if (!advanced) return;
-
     processTurn(advanced);
   }, []);
 
-  const processTurn = useCallback((currentState: GameState) => {
-    setState(currentState);
+  const [lastAgariWasDealerWin, setLastAgariWasDealerWin] = useState(false);
 
-    if (currentState.phase === 'round_end' || currentState.phase === 'game_end') {
-      setMessage(currentState.phase === 'game_end' ? 'ゲーム終了' : '流局');
-      return;
-    }
+  /** 点数移行を表示した後に次の局へ */
+  const showScoreAndAdvance = useCallback((reason: string, oyaWon: boolean, currentState?: GameState) => {
+    const s = currentState ?? state;
+    if (!s) return;
+    const before = s.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
+    const next = nextRound(oyaWon);
+    if (!next) return;
+    const after = next.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
 
-    // ツモ
-    const drawn = drawTile();
-    if (!drawn) {
-      setMessage('流局');
-      return;
-    }
-    setState(drawn);
-
-    if (drawn.current_turn === HUMAN_SEAT) {
-      // 人間のターン
-      setMessage('牌を選んで捨ててください');
-      const waits = getTenpaiTiles();
-      setTenpaiTiles(waits);
-
-      // ツモ和了チェック
-      const tsumoResult = checkTsumoAgari();
-      if (tsumoResult) {
-        setMessage('ツモ和了できます！');
-      }
-    } else {
-      // CPUのターン
-      setMessage(`${kazeToJa(drawn.players[drawn.current_turn].jikaze)}家の番...`);
-
+    const hasChange = before.some((b, i) => b.score !== after[i]?.score);
+    if (hasChange) {
+      setScoreTransition({ before, after, reason, oyaWon });
       setTimeout(() => {
-        // CPU AI判定
-        const aiAction = aiDecide(drawn.current_turn);
-        if (!aiAction) return;
+        setScoreTransition(null);
+        startNextRound(next);
+      }, 2500);
+    } else {
+      startNextRound(next);
+    }
+  }, [state]);
 
+  const startNextRound = useCallback((next: GameState) => {
+    setState(next);
+    if (next.phase === 'game_end') {
+      setMessage('ゲーム終了');
+      return;
+    }
+    setMessage('次の局を開始します');
+    setTimeout(() => {
+      const drawn = drawTile();
+      if (drawn) {
+        handleTurnAfterDraw(drawn);
+      }
+    }, 500);
+  }, []);
+
+  /** ドロー済みの状態からCPU/人間のターン処理 */
+  const handleTurnAfterDraw = useCallback((drawnState: GameState) => {
+    setState(drawnState);
+    // 流局チェック
+    if (drawnState.phase === 'round_end' || drawnState.phase === 'game_end') {
+      if (drawnState.phase === 'game_end') {
+        setMessage('ゲーム終了');
+      } else {
+        setMessage('流局');
+        const ds = drawnState;
+        setTimeout(() => showScoreAndAdvance('流局', false, ds), 2000);
+      }
+      return;
+    }
+    if (drawnState.current_turn === HUMAN_SEAT) {
+      setMessage('牌を選んで捨ててください');
+      setTenpaiTiles(getTenpaiTiles());
+      const tsumoResult = checkTsumoAgari();
+      if (tsumoResult) setMessage('ツモ和了できます！');
+    } else {
+      setMessage(`${kazeToJa(drawnState.players[drawnState.current_turn].jikaze)}家の番...`);
+      setTimeout(() => {
+        const aiAction = aiDecide(drawnState.current_turn);
+        if (!aiAction) return;
         if (aiAction.action === 'tsumo') {
           const tsumoResult = checkTsumoAgari();
           if (tsumoResult) {
             setState(tsumoResult.state);
             setAgariResult(tsumoResult);
-            setAgariWinner(`${kazeToJa(drawn.players[drawn.current_turn].jikaze)}家`);
+            setAgariWinner(`${kazeToJa(drawnState.players[drawnState.current_turn].jikaze)}家`);
+            setLastAgariWasDealerWin(drawnState.players[drawnState.current_turn].jikaze === 'ton');
             return;
           }
         }
-
         if (aiAction.action === 'riichi') {
           const riichiState = declareRiichi();
           if (riichiState) setState(riichiState);
         }
-
         if (aiAction.tile) {
           const afterDiscard = discardTile(aiAction.tile);
           if (afterDiscard) {
@@ -141,30 +207,125 @@ export function GameBoard() {
     }
   }, [processAfterDiscard]);
 
-  const handleAgariClose = useCallback(() => {
-    setAgariResult(null);
-    const next = nextRound(false);
-    if (next) {
-      setState(next);
-      if (next.phase === 'game_end') {
+  /** ツモ→ターン処理（鳴き/ロン後の次ターンから呼ばれる） */
+  const processTurn = useCallback((currentState: GameState) => {
+    setState(currentState);
+    if (currentState.phase === 'round_end' || currentState.phase === 'game_end') {
+      if (currentState.phase === 'game_end') {
         setMessage('ゲーム終了');
       } else {
-        setMessage('次の局を開始します');
-        setTimeout(() => {
-          const drawn = drawTile();
-          if (drawn) {
-            setState(drawn);
-            if (drawn.current_turn === HUMAN_SEAT) {
-              setMessage('牌を選んで捨ててください');
-              setTenpaiTiles(getTenpaiTiles());
-            } else {
-              processTurn(drawn);
-            }
-          }
-        }, 500);
+        setMessage('流局');
+        const cs = currentState;
+        setTimeout(() => showScoreAndAdvance('流局', false, cs), 2000);
+      }
+      return;
+    }
+    const drawn = drawTile();
+    if (!drawn) {
+      setMessage('流局');
+      const cs = currentState;
+      setTimeout(() => showScoreAndAdvance('流局', false, cs), 2000);
+      return;
+    }
+    handleTurnAfterDraw(drawn);
+  }, [handleTurnAfterDraw]);
+
+  const handlePon = useCallback(() => {
+    const newState = doPon(HUMAN_SEAT);
+    if (newState) {
+      setState(newState);
+      setCallInfo(null);
+      setMessage('ポン！ 牌を捨ててください');
+      setTenpaiTiles(getTenpaiTiles());
+    }
+  }, []);
+
+  const handleChi = useCallback((tiles: Tile[]) => {
+    if (tiles.length === 2) {
+      const newState = doChi(HUMAN_SEAT, tiles[0], tiles[1]);
+      if (newState) {
+        setState(newState);
+        setCallInfo(null);
+        setChiSelectMode(false);
+        setMessage('チー！ 牌を捨ててください');
+        setTenpaiTiles(getTenpaiTiles());
       }
     }
-  }, [processTurn]);
+  }, []);
+
+  const handleMinkan = useCallback(() => {
+    const newState = doMinkan(HUMAN_SEAT);
+    if (newState) {
+      setState(newState);
+      setCallInfo(null);
+      setMessage('カン！');
+      // カン後はツモ（嶺上牌）
+      setTimeout(() => {
+        const drawn = drawTile();
+        if (drawn) {
+          setState(drawn);
+          setMessage('牌を捨ててください');
+          setTenpaiTiles(getTenpaiTiles());
+        }
+      }, 300);
+    }
+  }, []);
+
+  const handleAnkan = useCallback((tile: Tile) => {
+    const newState = doAnkan(HUMAN_SEAT, tile);
+    if (newState) {
+      setState(newState);
+      setMessage('暗槓！');
+      setTimeout(() => {
+        const drawn = drawTile();
+        if (drawn) {
+          setState(drawn);
+          setMessage('牌を捨ててください');
+          setTenpaiTiles(getTenpaiTiles());
+        }
+      }, 300);
+    }
+  }, []);
+
+  const handleKakan = useCallback((tile: Tile) => {
+    const newState = doKakan(HUMAN_SEAT, tile);
+    if (newState) {
+      setState(newState);
+      setMessage('加槓！');
+      setTimeout(() => {
+        const drawn = drawTile();
+        if (drawn) {
+          setState(drawn);
+          setMessage('牌を捨ててください');
+          setTenpaiTiles(getTenpaiTiles());
+        }
+      }, 300);
+    }
+  }, []);
+
+  const handleRon = useCallback(() => {
+    const ronResult = checkRon(HUMAN_SEAT);
+    if (ronResult) {
+      setState(ronResult.state);
+      setAgariResult(ronResult);
+      setAgariWinner(`${kazeToJa(state!.players[HUMAN_SEAT].jikaze)}家（あなた）`);
+      setLastAgariWasDealerWin(state!.players[HUMAN_SEAT].jikaze === 'ton');
+      setCallInfo(null);
+    }
+  }, [state]);
+
+  const handleSkipCall = useCallback(() => {
+    setCallInfo(null);
+    setChiSelectMode(false);
+    setMessage('');
+    continueAfterCalls();
+  }, [continueAfterCalls]);
+
+  const handleAgariClose = useCallback(() => {
+    setAgariResult(null);
+    showScoreAndAdvance('和了', lastAgariWasDealerWin);
+    setLastAgariWasDealerWin(false);
+  }, [showScoreAndAdvance, lastAgariWasDealerWin]);
 
   const handleTsumo = useCallback(() => {
     const result = checkTsumoAgari();
@@ -172,73 +333,101 @@ export function GameBoard() {
       setState(result.state);
       setAgariResult(result);
       setAgariWinner(`${kazeToJa(state!.players[HUMAN_SEAT].jikaze)}家（あなた）`);
+      setLastAgariWasDealerWin(state!.players[HUMAN_SEAT].jikaze === 'ton');
     }
   }, [state]);
 
   if (!state) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-8">
-        <h1 className="text-5xl font-bold text-amber-300">麻雀</h1>
-        <p className="text-green-300">日本式リーチ麻雀</p>
-        <button
-          onClick={handleStart}
-          className="px-8 py-4 bg-yellow-500 hover:bg-yellow-400 text-green-950 text-xl font-bold rounded-xl transition shadow-lg"
-        >
-          ゲーム開始
-        </button>
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100vh', gap: 32, background: '#0d1a0f',
+      }}>
+        <h1 style={{ fontSize: 48, fontWeight: 700, color: '#e8c44a' }}>麻雀</h1>
+        <p style={{ color: '#6a8a6a' }}>日本式リーチ麻雀</p>
+        <button onClick={handleStart} style={{
+          padding: '16px 32px', background: '#e8c44a', border: 'none', borderRadius: 12,
+          color: '#1a1a0a', fontSize: 20, fontWeight: 700, cursor: 'pointer',
+        }}>ゲーム開始</button>
+        {onBack && (
+          <button onClick={onBack} style={{
+            color: '#6a8a6a', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14,
+          }}>戻る</button>
+        )}
       </div>
     );
   }
 
-  // プレイヤーの表示順: 対面(2) → 右(3) → 左(1) → 自分(0)
-  const seatOrder = [2, 3, 1, 0];
-
-  const canTsumo = state.phase === 'waiting_discard'
-    && state.current_turn === HUMAN_SEAT
-    && checkTsumoAgari() !== null;
+  // 麻雀の席順: 右=下家, 対面, 左=上家
+  const rightSeat = (HUMAN_SEAT + 1) % 4;
+  const topSeat = (HUMAN_SEAT + 2) % 4;
+  const leftSeat = (HUMAN_SEAT + 3) % 4;
+  const canTsumo = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT && checkTsumoAgari() !== null;
+  const isMyTurn = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT;
+  const ankanTiles = isMyTurn ? canAnkan(HUMAN_SEAT) : [];
+  const kakanTiles = isMyTurn ? canKakan(HUMAN_SEAT) : [];
+  const myPlayer = state.players[HUMAN_SEAT];
+  const canRiichi = isMyTurn && canDeclareRiichi(HUMAN_SEAT);
 
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
-      <GameInfo state={state} />
-
-      {message && (
-        <div className="text-center py-2 text-green-200 text-sm">{message}</div>
+    <div style={{
+      width: '100vw', height: '100vh', overflow: 'hidden',
+      background: 'linear-gradient(180deg, #3a2a1a 0%, #1a2a1a 30%, #0a1a0e 100%)',
+      display: 'flex', flexDirection: 'column', position: 'relative',
+    }}>
+      {onBack && (
+        <button onClick={onBack} style={{
+          position: 'absolute', top: 8, right: 8, zIndex: 30,
+          width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.4)', border: '1px solid #555', borderRadius: 4,
+          color: '#aaa', fontSize: 16, cursor: 'pointer',
+        }}>✕</button>
       )}
 
-      {/* 対面 */}
-      <div className="flex flex-col items-center gap-2">
-        <PlayerHand
-          player={state.players[seatOrder[0]]}
-          isCurrentTurn={state.current_turn === seatOrder[0]}
-          isHuman={false}
-        />
-        <Kawa tiles={state.players[seatOrder[0]].kawa} />
-      </div>
+      {/* ドラ表示（左上） */}
+      <DoraDisplay indicators={state.dora_indicators ?? []} />
 
-      {/* 左右 */}
-      <div className="flex justify-between items-start">
-        <div className="flex flex-col items-center gap-2">
-          <PlayerHand
-            player={state.players[seatOrder[2]]}
-            isCurrentTurn={state.current_turn === seatOrder[2]}
-            isHuman={false}
-          />
-          <Kawa tiles={state.players[seatOrder[2]].kawa} />
+      {message && (
+        <div style={{ textAlign: 'center', padding: '4px 0', color: '#8a8', fontSize: 12, flexShrink: 0 }}>
+          {message}
         </div>
-        <div className="flex flex-col items-center gap-2">
-          <PlayerHand
-            player={state.players[seatOrder[1]]}
-            isCurrentTurn={state.current_turn === seatOrder[1]}
-            isHuman={false}
-          />
-          <Kawa tiles={state.players[seatOrder[1]].kawa} />
+      )}
+
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+        {/* 対面（上）: 手牌は横 */}
+        <div style={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)' }}>
+          <PlayerHand player={state.players[topSeat]} isCurrentTurn={state.current_turn === topSeat} isHuman={false} compact />
+        </div>
+
+        {/* 左: 手牌は縦 */}
+        <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)' }}>
+          <PlayerHand player={state.players[leftSeat]} isCurrentTurn={state.current_turn === leftSeat} isHuman={false} compact vertical />
+        </div>
+
+        {/* 右: 手牌は縦 */}
+        <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)' }}>
+          <PlayerHand player={state.players[rightSeat]} isCurrentTurn={state.current_turn === rightSeat} isHuman={false} compact vertical />
+        </div>
+
+        {/* 中央: パネル + 四方の捨て牌 */}
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        }}>
+          <Kawa tiles={state.players[topSeat].kawa} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Kawa tiles={state.players[leftSeat].kawa} direction="vertical" />
+            <CenterPanel state={state} mySeat={HUMAN_SEAT} />
+            <Kawa tiles={state.players[rightSeat].kawa} direction="vertical" />
+          </div>
+          <Kawa tiles={state.players[HUMAN_SEAT].kawa} />
         </div>
       </div>
 
       {/* 自分 */}
-      <div className="mt-auto">
-        <Kawa tiles={state.players[HUMAN_SEAT].kawa} />
-        <div className="mt-2">
+      <div style={{ flexShrink: 0, padding: '8px 16px 12px', background: 'linear-gradient(0deg, rgba(0,0,0,0.4), transparent)' }}>
+        <div>
           <PlayerHand
             player={state.players[HUMAN_SEAT]}
             isCurrentTurn={state.current_turn === HUMAN_SEAT}
@@ -248,36 +437,105 @@ export function GameBoard() {
             onSelectTile={setSelectedTile}
           />
         </div>
-
-        {/* テンパイ表示 */}
         {tenpaiTiles.length > 0 && (
-          <div className="mt-2 flex items-center justify-center gap-2">
-            <span className="text-sm text-green-300">待ち:</span>
-            {tenpaiTiles.map((t, i) => (
-              <TileView key={i} tile={t} small />
-            ))}
+          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#8a8' }}>待ち:</span>
+            {tenpaiTiles.map((t, i) => <TileView key={i} tile={t} small />)}
           </div>
         )}
-
         {/* アクションボタン */}
-        <div className="flex justify-center gap-3 mt-3">
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
           {canTsumo && (
-            <button
-              onClick={handleTsumo}
-              className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition"
-            >
-              ツモ
-            </button>
+            <button onClick={handleTsumo} style={{
+              padding: '8px 24px', background: '#c41e3a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
+            }}>ツモ</button>
+          )}
+          {canRiichi && !riichiMode && (
+            <button onClick={handleRiichi} style={{
+              padding: '8px 24px', background: '#d4a030', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(212,160,48,0.4)',
+            }}>リーチ</button>
+          )}
+          {ankanTiles.map((t, i) => (
+            <button key={`ankan-${i}`} onClick={() => handleAnkan(t)} style={{
+              padding: '8px 24px', background: '#5a3a8a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>暗槓</button>
+          ))}
+          {kakanTiles.map((t, i) => (
+            <button key={`kakan-${i}`} onClick={() => handleKakan(t)} style={{
+              padding: '8px 24px', background: '#8a5a2a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>加槓</button>
+          ))}
+          {callInfo?.canRon && (
+            <button onClick={handleRon} style={{
+              padding: '8px 24px', background: '#c41e3a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
+            }}>ロン</button>
+          )}
+          {callInfo?.canMinkan && (
+            <button onClick={handleMinkan} style={{
+              padding: '8px 24px', background: '#8a5a2a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>カン</button>
+          )}
+          {callInfo?.canPon && (
+            <button onClick={handlePon} style={{
+              padding: '8px 24px', background: '#2a6aaa', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>ポン</button>
+          )}
+          {callInfo && callInfo.chiOptions.length > 0 && !chiSelectMode && (
+            <button onClick={() => setChiSelectMode(true)} style={{
+              padding: '8px 24px', background: '#2a8a4a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>チー</button>
+          )}
+          {callInfo && (
+            <button onClick={handleSkipCall} style={{
+              padding: '8px 24px', background: '#555', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>スキップ</button>
           )}
         </div>
+
+        {/* チー候補選択 */}
+        {chiSelectMode && callInfo && callInfo.chiOptions.length > 0 && (
+          <div style={{
+            display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8,
+            padding: '8px 12px', background: 'rgba(0,0,0,0.3)', borderRadius: 8,
+          }}>
+            {callInfo.chiOptions.map((opt, i) => (
+              <button key={i} onClick={() => handleChi(opt)} style={{
+                display: 'flex', gap: 2, padding: '4px 6px',
+                background: 'rgba(42,138,74,0.3)', border: '2px solid #2a8a4a',
+                borderRadius: 6, cursor: 'pointer', alignItems: 'center',
+              }}>
+                {opt.map((t, j) => (
+                  <TileView key={j} tile={t} small />
+                ))}
+              </button>
+            ))}
+            <button onClick={() => setChiSelectMode(false)} style={{
+              padding: '8px 16px', background: '#555', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            }}>戻る</button>
+          </div>
+        )}
       </div>
 
-      {/* 和了ダイアログ */}
-      {agariResult && (
-        <AgariDialog
-          result={agariResult}
-          winnerName={agariWinner}
-          onClose={handleAgariClose}
+      {agariResult && <AgariDialog result={agariResult} winnerName={agariWinner} onClose={handleAgariClose} />}
+
+      {scoreTransition && (
+        <ScoreTransition
+          beforeScores={scoreTransition.before}
+          afterScores={scoreTransition.after}
+          reason={scoreTransition.reason}
         />
       )}
     </div>

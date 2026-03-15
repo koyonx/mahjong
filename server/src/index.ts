@@ -13,6 +13,7 @@ import {
   drawTile, discardTile, advanceTurn,
   checkTsumo, checkRon, declareRiichi,
   aiDecide, getTenpai, nextRound,
+  canPon, doPon, canChi, doChi,
 } from './game-controller.ts';
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -92,7 +93,7 @@ function broadcastGameState(room: Room): void {
 function handleMessage(ws: WebSocket, msg: { type: string; [key: string]: unknown }): void {
   switch (msg.type) {
     case 'create_room':
-      handleCreateRoom(ws, msg.playerName as string);
+      handleCreateRoom(ws, msg.playerName as string, msg.gameMode as string | undefined);
       break;
     case 'join_room':
       handleJoinRoom(ws, msg.roomId as string, msg.playerName as string);
@@ -112,6 +113,12 @@ function handleMessage(ws: WebSocket, msg: { type: string; [key: string]: unknow
     case 'ron':
       handleRon(ws);
       break;
+    case 'pon':
+      handlePon(ws);
+      break;
+    case 'chi':
+      handleChi(ws, msg.tiles as { kind: string; suit: string; number: number; label: string }[]);
+      break;
     case 'skip_call':
       handleSkipCall(ws);
       break;
@@ -123,8 +130,9 @@ function handleMessage(ws: WebSocket, msg: { type: string; [key: string]: unknow
   }
 }
 
-function handleCreateRoom(ws: WebSocket, playerName: string): void {
-  const { roomId, seat } = createRoom(ws, playerName);
+function handleCreateRoom(ws: WebSocket, playerName: string, gameMode?: string): void {
+  const mode = (gameMode === 'tonpuu' ? 'tonpuu' : 'hanchan') as 'tonpuu' | 'hanchan';
+  const { roomId, seat } = createRoom(ws, playerName, mode);
   createGameRoom(roomId);
   sendJson(ws, { type: 'room_created', roomId, seat });
 
@@ -157,6 +165,13 @@ function handleStartGame(ws: WebSocket): void {
 
   startRoomGame(room.id);
   startGameEngine(room.id);
+
+  // シャッフル後の座席を各プレイヤーに通知
+  for (const player of room.players) {
+    if (player.ws && player.ws.readyState === 1) {
+      sendJson(player.ws, { type: 'seat_assigned', seat: player.seat });
+    }
+  }
 
   broadcastGameState(room);
   notifyCurrentTurn(room);
@@ -213,18 +228,7 @@ function handleTsumo(ws: WebSocket): void {
   broadcastGameState(room);
 
   // 次の局へ
-  setTimeout(() => {
-    nextRound(room.id, false);
-    const newPhase = getPhase(room.id);
-    if (newPhase === 'game_end') {
-      handleGameEnd(room);
-    } else {
-      drawTile(room.id);
-      broadcastGameState(room);
-      notifyCurrentTurn(room);
-      processAiTurns(room);
-    }
-  }, 3000);
+  setTimeout(() => advanceToNextRound(room), 3000);
 }
 
 function handleRiichi(ws: WebSocket, tile: { kind: string; suit: string; number: number; label: string }): void {
@@ -272,18 +276,7 @@ function handleRon(ws: WebSocket): void {
 
   broadcastGameState(room);
 
-  setTimeout(() => {
-    nextRound(room.id, false);
-    const newPhase = getPhase(room.id);
-    if (newPhase === 'game_end') {
-      handleGameEnd(room);
-    } else {
-      drawTile(room.id);
-      broadcastGameState(room);
-      notifyCurrentTurn(room);
-      processAiTurns(room);
-    }
-  }, 3000);
+  setTimeout(() => advanceToNextRound(room), 3000);
 }
 
 function handleLeaveRoom(ws: WebSocket): void {
@@ -305,55 +298,108 @@ function handleLeaveRoom(ws: WebSocket): void {
   }
 }
 
-function handleSkipCall(_ws: WebSocket): void {
-  // 現在は鳴きスキップのみ（将来的にポン・チー実装時に拡張）
+function handlePon(ws: WebSocket): void {
+  const room = getRoomBySocket(ws);
+  if (!room) return;
+  const seat = getSeatBySocket(ws);
+
+  if (doPon(room.id, seat)) {
+    broadcastToRoom(room, () => JSON.stringify({
+      type: 'message',
+      text: `${room.players.find(p => p.seat === seat)?.name} がポン！`,
+    }));
+    broadcastGameState(room);
+    notifyCurrentTurn(room);
+  } else {
+    sendError(ws, 'ポンできません');
+  }
+}
+
+function handleChi(ws: WebSocket, tiles: { kind: string; suit: string; number: number; label: string }[]): void {
+  const room = getRoomBySocket(ws);
+  if (!room) return;
+  const seat = getSeatBySocket(ws);
+
+  if (tiles.length === 2 && doChi(room.id, seat, tiles[0] as any, tiles[1] as any)) {
+    broadcastToRoom(room, () => JSON.stringify({
+      type: 'message',
+      text: `${room.players.find(p => p.seat === seat)?.name} がチー！`,
+    }));
+    broadcastGameState(room);
+    notifyCurrentTurn(room);
+  } else {
+    sendError(ws, 'チーできません');
+  }
+}
+
+function handleSkipCall(ws: WebSocket): void {
+  const room = getRoomBySocket(ws);
+  if (!room) return;
+  // スキップ: 鳴き判定待ちを解除して次の手番に進む
+  continueAfterCalls(room);
 }
 
 function processAfterDiscard(room: Room): void {
   const currentTurn = getCurrentTurn(room.id);
 
-  // 他プレイヤーのロン判定（人間のみ通知、AIは自動判定）
+  // ロン判定（AIは自動、人間はcan_ronで通知 → 簡略化: 全員自動）
   for (const player of room.players) {
     if (player.seat === currentTurn) continue;
 
-    if (!player.isHuman) {
-      // AIのロン自動判定
-      const ronResult = checkRon(room.id, player.seat);
-      if (ronResult) {
-        broadcastToRoom(room, () => JSON.stringify({
-          type: 'agari',
-          result: {
-            yakus: ronResult.yakus,
-            han: ronResult.han,
-            fu: ronResult.fu,
-            total: ronResult.total,
-            payment: ronResult.payment,
-          },
-          winnerSeat: ronResult.winner,
-          winnerName: player.name,
-        }));
-        broadcastGameState(room);
-
-        setTimeout(() => {
-          nextRound(room.id, false);
-          const newPhase = getPhase(room.id);
-          if (newPhase === 'game_end') {
-            handleGameEnd(room);
-          } else {
-            drawTile(room.id);
-            broadcastGameState(room);
-            notifyCurrentTurn(room);
-            processAiTurns(room);
-          }
-        }, 3000);
-        return;
-      }
+    const ronResult = checkRon(room.id, player.seat);
+    if (ronResult) {
+      broadcastToRoom(room, () => JSON.stringify({
+        type: 'agari',
+        result: {
+          yakus: ronResult.yakus, han: ronResult.han,
+          fu: ronResult.fu, total: ronResult.total,
+          payment: ronResult.payment,
+        },
+        winnerSeat: ronResult.winner,
+        winnerName: player.name,
+      }));
+      broadcastGameState(room);
+      setTimeout(() => advanceToNextRound(room), 3000);
+      return;
     }
-    // 人間のロン判定（手牌にロン可能な役があるか）
-    // 簡略化: 現在は自動スキップ（将来的に通知追加）
   }
 
-  // ロンなし → 次の手番
+  // ポン・チー判定
+  let hasHumanCall = false;
+  for (const player of room.players) {
+    if (player.seat === currentTurn) continue;
+
+    if (player.isHuman && player.ws) {
+      const ponAvail = canPon(room.id, player.seat);
+      const chiOptions = canChi(room.id, player.seat);
+      if (ponAvail || chiOptions.length > 0) {
+        sendJson(player.ws, {
+          type: 'can_call',
+          canPon: ponAvail,
+          chiOptions,
+        });
+        hasHumanCall = true;
+      }
+    } else if (!player.isHuman) {
+      // AIのポン判定（簡略化: AIはポンしない、チーもしない）
+    }
+  }
+
+  if (hasHumanCall) {
+    // 人間の鳴き判定を待つ（タイムアウト: 10秒で自動スキップ）
+    setTimeout(() => {
+      const phase = getPhase(room.id);
+      if (phase === 'waiting_call') {
+        continueAfterCalls(room);
+      }
+    }, 10000);
+    return;
+  }
+
+  continueAfterCalls(room);
+}
+
+function continueAfterCalls(room: Room): void {
   advanceTurn(room.id);
   drawTile(room.id);
   broadcastGameState(room);
@@ -361,18 +407,7 @@ function processAfterDiscard(room: Room): void {
   const phase = getPhase(room.id);
   if (phase === 'round_end') {
     broadcastToRoom(room, () => JSON.stringify({ type: 'round_end', reason: '流局' }));
-    setTimeout(() => {
-      nextRound(room.id, false);
-      const newPhase = getPhase(room.id);
-      if (newPhase === 'game_end') {
-        handleGameEnd(room);
-      } else {
-        drawTile(room.id);
-        broadcastGameState(room);
-        notifyCurrentTurn(room);
-        processAiTurns(room);
-      }
-    }, 2000);
+    setTimeout(() => advanceToNextRound(room), 2000);
     return;
   }
 
@@ -388,23 +423,17 @@ function notifyCurrentTurn(room: Room): void {
     const phase = getPhase(room.id);
     if (phase === 'waiting_discard') {
       const tenpaiTiles = getTenpai(room.id);
-      const tsumoResult = checkTsumo(room.id);
 
-      // ツモ和了チェック（実際のツモは行わない、判定のみ）
-      // checkTsumoは副作用があるので、stateを戻す必要がある
-      // → 簡略化: canTsumoフラグだけ送る
+      // aiDecideでツモ和了可否を判定（副作用なし）
+      const action = aiDecide(room.id, currentTurn);
+      const canTsumo = action?.action === 'tsumo';
+
       sendJson(player.ws, {
         type: 'your_turn',
-        canTsumo: tsumoResult !== null,
-        canRiichi: false, // TODO: リーチ判定
+        canTsumo,
+        canRiichi: false,
         tenpaiTiles,
       });
-
-      // checkTsumoで状態が変わった場合を考慮してstateを再送
-      if (tsumoResult) {
-        // ツモ和了が実行されてしまったので、stateを再送
-        broadcastGameState(room);
-      }
     }
   }
 }
@@ -439,18 +468,7 @@ function processAiTurns(room: Room): void {
         }));
         broadcastGameState(room);
 
-        setTimeout(() => {
-          nextRound(room.id, false);
-          const newPhase = getPhase(room.id);
-          if (newPhase === 'game_end') {
-            handleGameEnd(room);
-          } else {
-            drawTile(room.id);
-            broadcastGameState(room);
-            notifyCurrentTurn(room);
-            processAiTurns(room);
-          }
-        }, 3000);
+        setTimeout(() => advanceToNextRound(room), 3000);
         return;
       }
     }
@@ -469,6 +487,31 @@ function processAiTurns(room: Room): void {
       setTimeout(() => processAfterDiscard(room), 500);
     }
   }, 800);
+}
+
+/** 次の局に進む、または東風戦終了チェック */
+function advanceToNextRound(room: Room): void {
+  nextRound(room.id, false);
+  const newPhase = getPhase(room.id);
+
+  // 東風戦: 南場に入ったら終了
+  if (room.gameMode === 'tonpuu') {
+    const stateJson = getState(room.id, 0);
+    const st = JSON.parse(stateJson);
+    if (st.bakaze === 'nan') {
+      handleGameEnd(room);
+      return;
+    }
+  }
+
+  if (newPhase === 'game_end') {
+    handleGameEnd(room);
+  } else {
+    drawTile(room.id);
+    broadcastGameState(room);
+    notifyCurrentTurn(room);
+    processAiTurns(room);
+  }
 }
 
 function handleGameEnd(room: Room): void {

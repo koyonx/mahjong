@@ -16,6 +16,10 @@ type t = {
   is_ippatsu : bool;           (** 一発の可能性があるか *)
   jikaze : Tile.jihai;         (** 自風 *)
   score : int;                 (** 持ち点 *)
+  aka_count : int;             (** 赤ドラ枚数 *)
+  aka_manzu : bool;            (** 赤5萬を持っているか *)
+  aka_pinzu : bool;            (** 赤5筒を持っているか *)
+  aka_souzu : bool;            (** 赤5索を持っているか *)
 }
 
 (** プレイヤーを初期化 *)
@@ -27,6 +31,10 @@ let create (jikaze : Tile.jihai) : t = {
   is_ippatsu = false;
   jikaze;
   score = 25000;
+  aka_count = 0;
+  aka_manzu = false;
+  aka_pinzu = false;
+  aka_souzu = false;
 }
 
 (** 門前か（副露なし、暗槓は除く） *)
@@ -89,6 +97,69 @@ let chi (t1 : Tile.tile) (t2 : Tile.tile) (taken : Tile.tile) (player : t) : (t,
         | None -> Error "チーできる牌がありません")
      | None -> Error "チーできる牌がありません")
   | _ -> Error "順子になりません"
+
+(** 明槓（他家の捨て牌 + 手牌3枚） *)
+let minkan (tile : Tile.tile) (player : t) : (t, string) result =
+  let hand_tiles = player.hand.tiles in
+  let count = List.length (List.filter (fun t -> Tile.compare t tile = 0) hand_tiles) in
+  if count < 3 then Error "明槓できる牌がありません"
+  else
+    match Mentsu.remove_one tile hand_tiles with
+    | Some r1 ->
+      (match Mentsu.remove_one tile r1 with
+       | Some r2 ->
+         (match Mentsu.remove_one tile r2 with
+          | Some r3 ->
+            Ok { player with
+                 hand = Hand.make r3;
+                 furo_list = Minkan tile :: player.furo_list;
+                 is_ippatsu = false }
+          | None -> Error "明槓できる牌がありません")
+       | None -> Error "明槓できる牌がありません")
+    | None -> Error "明槓できる牌がありません"
+
+(** 暗槓（手牌4枚） *)
+let ankan (tile : Tile.tile) (player : t) : (t, string) result =
+  let hand_tiles = player.hand.tiles in
+  let count = List.length (List.filter (fun t -> Tile.compare t tile = 0) hand_tiles) in
+  if count < 4 then Error "暗槓できる牌がありません"
+  else
+    match Mentsu.remove_one tile hand_tiles with
+    | Some r1 ->
+      (match Mentsu.remove_one tile r1 with
+       | Some r2 ->
+         (match Mentsu.remove_one tile r2 with
+          | Some r3 ->
+            (match Mentsu.remove_one tile r3 with
+             | Some r4 ->
+               Ok { player with
+                    hand = Hand.make r4;
+                    furo_list = Ankan tile :: player.furo_list;
+                    is_ippatsu = false }
+             | None -> Error "暗槓できる牌がありません")
+          | None -> Error "暗槓できる牌がありません")
+       | None -> Error "暗槓できる牌がありません")
+    | None -> Error "暗槓できる牌がありません"
+
+(** 加槓（既にポンしている牌の4枚目をツモった時） *)
+let kakan (tile : Tile.tile) (player : t) : (t, string) result =
+  let has_pon = List.exists (fun f ->
+    match f with Pon t -> Tile.compare t tile = 0 | _ -> false
+  ) player.furo_list in
+  if not has_pon then Error "加槓できません"
+  else
+    match Mentsu.remove_one tile player.hand.tiles with
+    | Some rest ->
+      let new_furo = List.map (fun f ->
+        match f with
+        | Pon t when Tile.compare t tile = 0 -> Minkan t
+        | other -> other
+      ) player.furo_list in
+      Ok { player with
+           hand = Hand.make rest;
+           furo_list = new_furo;
+           is_ippatsu = false }
+    | None -> Error "加槓できません"
 
 (** 持ち点を加減する *)
 let add_score (diff : int) (player : t) : t =

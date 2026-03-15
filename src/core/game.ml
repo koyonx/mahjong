@@ -17,8 +17,10 @@ type round = {
   kyoku : int;                 (** 局数 (1-4) *)
   honba : int;                 (** 本場 *)
   riichi_sticks : int;         (** リーチ棒の数 *)
+  seat_offset : int;           (** 席順オフセット（ランダム化用） *)
+  kan_count : int;             (** カン回数（ドラ増加用） *)
   wall : Wall.t;               (** 牌山 *)
-  players : Player.t array;    (** プレイヤー（東=0, 南=1, 西=2, 北=3） *)
+  players : Player.t array;    (** プレイヤー *)
   current_turn : int;          (** 現在の手番 (0-3) *)
   phase : phase;               (** フェーズ *)
   last_discard : Tile.tile option;       (** 直前の捨て牌 *)
@@ -35,50 +37,75 @@ let jikaze_of_seat (kyoku : int) (seat : int) : Tile.jihai =
   | 3 -> Tile.Pei
   | _ -> Tile.Ton
 
-(** 配牌 *)
-let deal (wall : Wall.t) : (Tile.tile list array * Wall.t) =
+(** 赤ドラ情報 *)
+type aka_info = {
+  count : int;
+  manzu : bool;
+  pinzu : bool;
+  souzu : bool;
+}
+
+let empty_aka = { count = 0; manzu = false; pinzu = false; souzu = false }
+
+let add_aka (info : aka_info) (tile : Tile.tile) : aka_info =
+  { count = info.count + 1;
+    manzu = info.manzu || (match tile with Tile.Suhai (Tile.Manzu, 5) -> true | _ -> false);
+    pinzu = info.pinzu || (match tile with Tile.Suhai (Tile.Pinzu, 5) -> true | _ -> false);
+    souzu = info.souzu || (match tile with Tile.Suhai (Tile.Souzu, 5) -> true | _ -> false);
+  }
+
+(** 配牌（赤ドラ情報も返す） *)
+let deal (wall : Wall.t) : (Tile.tile list array * aka_info array * Wall.t) =
   let hands = Array.make 4 [] in
+  let aka_infos = Array.make 4 empty_aka in
   let w = ref wall in
-  (* 4枚ずつ3回 = 12枚 *)
   for round_num = 0 to 2 do
     ignore round_num;
     for seat = 0 to 3 do
       for _ = 0 to 3 do
         match Wall.draw !w with
-        | Some (tile, new_wall) ->
+        | Some (tile, is_red, new_wall) ->
           hands.(seat) <- tile :: hands.(seat);
+          if is_red then aka_infos.(seat) <- add_aka aka_infos.(seat) tile;
           w := new_wall
         | None -> ()
       done
     done
   done;
-  (* 1枚ずつ1回 = 13枚 *)
   for seat = 0 to 3 do
     match Wall.draw !w with
-    | Some (tile, new_wall) ->
+    | Some (tile, is_red, new_wall) ->
       hands.(seat) <- tile :: hands.(seat);
+      if is_red then aka_infos.(seat) <- add_aka aka_infos.(seat) tile;
       w := new_wall
     | None -> ()
   done;
-  (hands, !w)
+  (hands, aka_infos, !w)
 
 (** 新しい局を開始 *)
 let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int)
-    (scores : int array) : round =
+    (seat_offset : int) (scores : int array) : round =
   let wall = Wall.create () in
-  let (dealt_hands, wall_after_deal) = deal wall in
+  let (dealt_hands, aka_infos, wall_after_deal) = deal wall in
+  (* 親(東家)のseat: kyokuとoffsetで決定 *)
+  let oya = ((kyoku - 1) + seat_offset) mod 4 in
   let players = Array.init 4 (fun i ->
-    let jikaze = jikaze_of_seat kyoku i in
+    let dist = (i - oya + 4) mod 4 in
+    let jikaze = match dist with
+      | 0 -> Tile.Ton | 1 -> Tile.Nan | 2 -> Tile.Sha | _ -> Tile.Pei
+    in
     let p = Player.create jikaze in
-    { p with hand = Hand.make dealt_hands.(i); score = scores.(i) }
+    let ai = aka_infos.(i) in
+    { p with hand = Hand.make dealt_hands.(i); score = scores.(i);
+      aka_count = ai.count; aka_manzu = ai.manzu; aka_pinzu = ai.pinzu; aka_souzu = ai.souzu }
   ) in
-  (* 親（東家）がツモ *)
-  let oya = (kyoku - 1) mod 4 in
   {
     bakaze;
     kyoku;
     honba;
     riichi_sticks;
+    seat_offset;
+    kan_count = 0;
     wall = wall_after_deal;
     players;
     current_turn = oya;
@@ -87,9 +114,10 @@ let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int
     last_discard_player = None;
   }
 
-(** ゲーム開始（東1局から） *)
+(** ゲーム開始（席順ランダム、東1局から） *)
 let start () : round =
-  new_round Tile.Ton 1 0 0 [|25000; 25000; 25000; 25000|]
+  let offset = Random.int 4 in
+  new_round Tile.Ton 1 0 0 offset [|25000; 25000; 25000; 25000|]
 
 (** ツモを実行 *)
 let draw_tile (game : round) : (round, string) result =
@@ -97,10 +125,18 @@ let draw_tile (game : round) : (round, string) result =
   else
     match Wall.draw game.wall with
     | None -> Ok { game with phase = RoundEnd }  (* 流局 *)
-    | Some (tile, new_wall) ->
+    | Some (tile, is_red, new_wall) ->
       let player = game.players.(game.current_turn) in
       match Player.tsumo tile player with
       | Ok new_player ->
+        let new_player = if is_red then
+          { new_player with
+            aka_count = new_player.aka_count + 1;
+            aka_manzu = new_player.aka_manzu || (match tile with Tile.Suhai (Tile.Manzu, 5) -> true | _ -> false);
+            aka_pinzu = new_player.aka_pinzu || (match tile with Tile.Suhai (Tile.Pinzu, 5) -> true | _ -> false);
+            aka_souzu = new_player.aka_souzu || (match tile with Tile.Suhai (Tile.Souzu, 5) -> true | _ -> false);
+          }
+        else new_player in
         let players = Array.copy game.players in
         players.(game.current_turn) <- new_player;
         Ok { game with wall = new_wall; players; phase = WaitingDiscard }
@@ -127,24 +163,46 @@ let advance_turn (game : round) : round =
   let next = (game.current_turn + 1) mod 4 in
   { game with current_turn = next; phase = WaitingDraw }
 
+(** 振聴チェック: 捨て牌にある牌でロンできない *)
+let is_furiten (player : Player.t) (tile : Tile.tile) : bool =
+  (* 自分の河に同じ牌があれば振聴 *)
+  List.exists (fun t -> Tile.compare t tile = 0) player.kawa
+
+(** 海底かどうか（残り0枚） *)
+let is_haitei (game : round) : bool =
+  Wall.remaining game.wall = 0
+
 (** ロン和了の処理 *)
 let ron (game : round) (winner : int) : (round, string) result =
   match game.last_discard with
   | None -> Error "ロンできる捨て牌がありません"
   | Some tile ->
     let player = game.players.(winner) in
+    (* 振聴チェック *)
+    if is_furiten player tile then Error "振聴のためロンできません"
+    else
     let tiles = tile :: player.hand.tiles in
+    let dora_count = Wall.count_dora game.wall game.kan_count tiles in
+    let uradora_count = if player.is_riichi then Wall.count_uradora game.wall game.kan_count tiles else 0 in
+    let total_dora = dora_count + uradora_count + player.aka_count in
     let ctx = {
       Yaku.is_tsumo = false;
       is_riichi = player.is_riichi;
+      is_double_riichi = false;
       is_ippatsu = player.is_ippatsu;
       is_tenhou = false;
       is_chiihou = false;
+      is_menzen = Player.is_menzen player;
+      is_haitei = false;
+      is_houtei = is_haitei game;
+      dora_count = total_dora;
       bakaze = game.bakaze;
       jikaze = player.jikaze;
     } in
     let is_oya = player.jikaze = Tile.Ton in
-    match Scoring.score_hand tiles ctx is_oya with
+    let furo_count = List.length player.furo_list in
+    let furo_mentsu = player.furo_list in
+    match Scoring.score_hand ~furo_count ~furo_mentsu tiles ctx is_oya with
     | None -> Error "役がありません"
     | Some result ->
       let loser = match game.last_discard_player with Some p -> p | None -> 0 in
@@ -158,17 +216,27 @@ let ron (game : round) (winner : int) : (round, string) result =
 (** ツモ和了の処理 *)
 let tsumo_agari (game : round) : (round, string) result =
   let player = game.players.(game.current_turn) in
+  let dora_count = Wall.count_dora game.wall game.kan_count player.hand.tiles in
+  let uradora_count = if player.is_riichi then Wall.count_uradora game.wall game.kan_count player.hand.tiles else 0 in
+  let total_dora = dora_count + uradora_count + player.aka_count in
   let ctx = {
     Yaku.is_tsumo = true;
     is_riichi = player.is_riichi;
+    is_double_riichi = false;
     is_ippatsu = player.is_ippatsu;
     is_tenhou = false;
     is_chiihou = false;
+    is_menzen = Player.is_menzen player;
+    is_haitei = is_haitei game;
+    is_houtei = false;
+    dora_count = total_dora;
     bakaze = game.bakaze;
     jikaze = player.jikaze;
   } in
   let is_oya = player.jikaze = Tile.Ton in
-  match Scoring.score_hand player.hand.tiles ctx is_oya with
+  let furo_count = List.length player.furo_list in
+  let furo_mentsu = player.furo_list in
+  match Scoring.score_hand ~furo_count ~furo_mentsu player.hand.tiles ctx is_oya with
   | None -> Error "役がありません"
   | Some result ->
     let players = Array.copy game.players in
@@ -203,20 +271,52 @@ let declare_riichi (game : round) : (round, string) result =
     Ok { game with players; riichi_sticks = game.riichi_sticks + 1 }
   | Error e -> Error e
 
+(** テンパイ判定 *)
+let is_tenpai (player : Player.t) : bool =
+  List.length player.hand.tiles = 13 &&
+  Hand.tenpai_tiles player.hand <> []
+
+(** 流局時のテンパイ/ノーテン精算 *)
+let ryuukyoku_payments (game : round) : round =
+  let players = Array.copy game.players in
+  let tenpai_count = Array.fold_left (fun acc (p : Player.t) ->
+    if is_tenpai p then acc + 1 else acc
+  ) 0 players in
+  if tenpai_count > 0 && tenpai_count < 4 then begin
+    (* テンパイ者が受け取る合計3000点をノーテン者が払う *)
+    let pay_per_noten = 3000 / (4 - tenpai_count) in
+    let recv_per_tenpai = 3000 / tenpai_count in
+    Array.iteri (fun i (p : Player.t) ->
+      if is_tenpai p then
+        players.(i) <- Player.add_score recv_per_tenpai p
+      else
+        players.(i) <- Player.add_score (-pay_per_noten) p
+    ) players
+  end;
+  { game with players }
+
 (** 次の局に進む *)
 let next_round (game : round) (oya_won : bool) : round =
+  (* 流局時はテンパイ精算を実行 *)
+  let game =
+    if game.phase = RoundEnd && not oya_won then
+      ryuukyoku_payments game
+    else game
+  in
   let scores = Array.map (fun (p : Player.t) -> p.score) game.players in
-  if oya_won then
+  let offset = game.seat_offset in
+  let oya_seat = ((game.kyoku - 1) + offset) mod 4 in
+  let oya_tenpai = is_tenpai game.players.(oya_seat) in
+  if oya_won || oya_tenpai then
     (* 親の連荘 *)
-    new_round game.bakaze game.kyoku (game.honba + 1) game.riichi_sticks scores
+    new_round game.bakaze game.kyoku (game.honba + 1) game.riichi_sticks offset scores
   else
     let next_kyoku = game.kyoku + 1 in
     if next_kyoku > 4 then
       match game.bakaze with
       | Tile.Ton ->
-        new_round Tile.Nan 1 0 game.riichi_sticks scores
+        new_round Tile.Nan 1 0 game.riichi_sticks offset scores
       | _ ->
-        (* 南4局終了 → ゲーム終了（簡略化） *)
         { game with phase = GameEnd }
     else
-      new_round game.bakaze next_kyoku 0 game.riichi_sticks scores
+      new_round game.bakaze next_kyoku 0 game.riichi_sticks offset scores
