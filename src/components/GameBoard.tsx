@@ -27,7 +27,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [agariWinner, setAgariWinner] = useState<string>('');
   const [tenpaiTiles, setTenpaiTiles] = useState<Tile[]>([]);
   const [message, setMessage] = useState<string>('');
-  const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][]; canMinkan: boolean } | null>(null);
+  const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][]; canMinkan: boolean; canRon: boolean } | null>(null);
   const [riichiMode, setRiichiMode] = useState(false);
 
   const handleStart = useCallback(() => {
@@ -78,27 +78,36 @@ export function GameBoard({ onBack }: GameBoardProps) {
   }, []);
 
   const processAfterDiscard = useCallback((currentState: GameState) => {
-    // ロン判定
+    // CPUのロン判定（自動）
     for (let i = 0; i < 4; i++) {
       if (i === currentState.current_turn) continue;
+      if (i === HUMAN_SEAT) continue; // 人間は後で選択させる
       const ronResult = checkRon(i);
       if (ronResult) {
         setState(ronResult.state);
         setAgariResult(ronResult);
         setAgariWinner(`${kazeToJa(currentState.players[i].jikaze)}家`);
+        setLastAgariWasDealerWin(currentState.players[i].jikaze === 'ton');
         return;
       }
     }
 
-    // 人間(seat 0)のポン・チー・明槓判定
-    const HUMAN = 0;
-    if (currentState.current_turn !== HUMAN) {
-      const ponAvail = canPon(HUMAN);
-      const chiOptions = canChi(HUMAN);
-      const minkanAvail = canMinkan(HUMAN);
-      if (ponAvail || chiOptions.length > 0 || minkanAvail) {
-        setCallInfo({ canPon: ponAvail, chiOptions, canMinkan: minkanAvail });
-        setMessage('鳴きますか？');
+    // 人間のロン・ポン・チー・明槓判定
+    if (currentState.current_turn !== HUMAN_SEAT) {
+      // ロン可否を事前チェック（checkRonは副作用があるので呼ばない）
+      // 代わりにstate.last_discardでテンパイ牌と照合
+      const lastTile = currentState.last_discard;
+      const humanTenpai = getTenpaiTiles();
+      const humanCanRon = lastTile != null && humanTenpai.some(t =>
+        t.kind === lastTile.kind && t.suit === lastTile.suit && t.number === lastTile.number
+      );
+
+      const ponAvail = canPon(HUMAN_SEAT);
+      const chiOptions = canChi(HUMAN_SEAT);
+      const minkanAvail = canMinkan(HUMAN_SEAT);
+      if (humanCanRon || ponAvail || chiOptions.length > 0 || minkanAvail) {
+        setCallInfo({ canPon: ponAvail, chiOptions, canMinkan: minkanAvail, canRon: humanCanRon });
+        setMessage(humanCanRon ? 'ロンしますか？' : '鳴きますか？');
         return;
       }
     }
@@ -108,8 +117,10 @@ export function GameBoard({ onBack }: GameBoardProps) {
     processTurn(advanced);
   }, []);
 
-  const advanceToNextRound = useCallback(() => {
-    const next = nextRound(false);
+  const [lastAgariWasDealerWin, setLastAgariWasDealerWin] = useState(false);
+
+  const advanceToNextRound = useCallback((oyaWon = false) => {
+    const next = nextRound(oyaWon);
     if (!next) return;
     setState(next);
     if (next.phase === 'game_end') {
@@ -154,6 +165,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
             setState(tsumoResult.state);
             setAgariResult(tsumoResult);
             setAgariWinner(`${kazeToJa(drawnState.players[drawnState.current_turn].jikaze)}家`);
+            setLastAgariWasDealerWin(drawnState.players[drawnState.current_turn].jikaze === 'ton');
             return;
           }
         }
@@ -265,6 +277,17 @@ export function GameBoard({ onBack }: GameBoardProps) {
     }
   }, []);
 
+  const handleRon = useCallback(() => {
+    const ronResult = checkRon(HUMAN_SEAT);
+    if (ronResult) {
+      setState(ronResult.state);
+      setAgariResult(ronResult);
+      setAgariWinner(`${kazeToJa(state!.players[HUMAN_SEAT].jikaze)}家（あなた）`);
+      setLastAgariWasDealerWin(state!.players[HUMAN_SEAT].jikaze === 'ton');
+      setCallInfo(null);
+    }
+  }, [state]);
+
   const handleSkipCall = useCallback(() => {
     setCallInfo(null);
     setMessage('');
@@ -273,8 +296,9 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
   const handleAgariClose = useCallback(() => {
     setAgariResult(null);
-    advanceToNextRound();
-  }, [advanceToNextRound]);
+    advanceToNextRound(lastAgariWasDealerWin);
+    setLastAgariWasDealerWin(false);
+  }, [advanceToNextRound, lastAgariWasDealerWin]);
 
   const handleTsumo = useCallback(() => {
     const result = checkTsumoAgari();
@@ -282,6 +306,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
       setState(result.state);
       setAgariResult(result);
       setAgariWinner(`${kazeToJa(state!.players[HUMAN_SEAT].jikaze)}家（あなた）`);
+      setLastAgariWasDealerWin(state!.players[HUMAN_SEAT].jikaze === 'ton');
     }
   }, [state]);
 
@@ -420,6 +445,13 @@ export function GameBoard({ onBack }: GameBoardProps) {
               color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
             }}>加槓</button>
           ))}
+          {callInfo?.canRon && (
+            <button onClick={handleRon} style={{
+              padding: '8px 24px', background: '#c41e3a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
+            }}>ロン</button>
+          )}
           {callInfo?.canMinkan && (
             <button onClick={handleMinkan} style={{
               padding: '8px 24px', background: '#8a5a2a', border: 'none', borderRadius: 6,
