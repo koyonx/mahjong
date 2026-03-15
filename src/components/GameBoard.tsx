@@ -28,6 +28,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [tenpaiTiles, setTenpaiTiles] = useState<Tile[]>([]);
   const [message, setMessage] = useState<string>('');
   const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][]; canMinkan: boolean } | null>(null);
+  const [riichiMode, setRiichiMode] = useState(false);
 
   const handleStart = useCallback(() => {
     const newState = startGame();
@@ -47,6 +48,11 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const handleDiscard = useCallback((tile: Tile) => {
     if (!state || state.phase !== 'waiting_discard') return;
     if (state.current_turn !== HUMAN_SEAT) return;
+    // リーチモード中はリーチ宣言後に打牌
+    if (riichiMode) {
+      handleRiichiDiscard(tile);
+      return;
+    }
     const newState = discardTile(tile);
     if (!newState) return;
     setState(newState);
@@ -54,7 +60,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setTenpaiTiles([]);
     setMessage('');
     setTimeout(() => processAfterDiscard(newState), 300);
-  }, [state]);
+  }, [state, riichiMode, handleRiichiDiscard]);
 
   const continueAfterCalls = useCallback(() => {
     setCallInfo(null);
@@ -251,6 +257,25 @@ export function GameBoard({ onBack }: GameBoardProps) {
     }
   }, []);
 
+  const handleRiichi = useCallback(() => {
+    setRiichiMode(true);
+    setMessage('リーチ！ 捨てる牌を選んでください');
+  }, []);
+
+  const handleRiichiDiscard = useCallback((tile: Tile) => {
+    const riichiState = declareRiichi();
+    if (riichiState) setState(riichiState);
+    const newState = discardTile(tile);
+    if (newState) {
+      setState(newState);
+      setSelectedTile(null);
+      setTenpaiTiles([]);
+      setRiichiMode(false);
+      setMessage('');
+      setTimeout(() => processAfterDiscard(newState), 300);
+    }
+  }, [processAfterDiscard]);
+
   const handleSkipCall = useCallback(() => {
     setCallInfo(null);
     setMessage('');
@@ -300,6 +325,9 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const isMyTurn = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT;
   const ankanTiles = isMyTurn ? canAnkan(HUMAN_SEAT) : [];
   const kakanTiles = isMyTurn ? canKakan(HUMAN_SEAT) : [];
+  const myPlayer = state.players[HUMAN_SEAT];
+  const canRiichi = isMyTurn && !myPlayer.is_riichi && myPlayer.is_menzen
+    && myPlayer.score >= 1000 && tenpaiTiles.length > 0;
 
   return (
     <div style={{
@@ -383,6 +411,13 @@ export function GameBoard({ onBack }: GameBoardProps) {
               color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
               boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
             }}>ツモ</button>
+          )}
+          {canRiichi && !riichiMode && (
+            <button onClick={handleRiichi} style={{
+              padding: '8px 24px', background: '#d4a030', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(212,160,48,0.4)',
+            }}>リーチ</button>
           )}
           {ankanTiles.map((t, i) => (
             <button key={`ankan-${i}`} onClick={() => handleAnkan(t)} style={{

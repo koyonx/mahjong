@@ -29,29 +29,31 @@ export function AgariDialog({ result, winnerName, onClose }: AgariDialogProps) {
         </h2>
         <p className="text-center text-lg mb-4">{winnerName}</p>
 
-        {/* 和了手牌 */}
+        {/* 和了手牌（1列に収める） */}
         {result.winner_hand && result.winner_hand.length > 0 && (
-          <div className="mb-4">
-            <div className="flex gap-1 justify-center flex-wrap items-end">
-              {result.winner_hand.map((t, i) => (
-                <TileView key={i} tile={t} small />
-              ))}
-              {/* ロン牌は区切って表示 */}
-              {result.agari_tile && (
-                <>
-                  <div style={{ width: 8 }} />
-                  <div style={{ position: 'relative' }}>
-                    <TileView tile={result.agari_tile} small />
-                    <div style={{
-                      position: 'absolute', bottom: -14, left: '50%', transform: 'translateX(-50%)',
-                      fontSize: 9, color: '#e8c44a', whiteSpace: 'nowrap',
-                    }}>
-                      {result.is_tsumo ? 'ツモ' : 'ロン'}
-                    </div>
+          <div className="mb-5" style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+            gap: 1, overflow: 'hidden',
+            transform: result.winner_hand.length > 10 ? 'scale(0.85)' : undefined,
+            transformOrigin: 'center bottom',
+          }}>
+            {result.winner_hand.map((t, i) => (
+              <TileView key={i} tile={t} small />
+            ))}
+            {result.agari_tile && (
+              <>
+                <div style={{ width: 6, flexShrink: 0 }} />
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <TileView tile={result.agari_tile} small />
+                  <div style={{
+                    position: 'absolute', bottom: -13, left: '50%', transform: 'translateX(-50%)',
+                    fontSize: 9, color: '#e8c44a', whiteSpace: 'nowrap',
+                  }}>
+                    {result.is_tsumo ? 'ツモ' : 'ロン'}
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
