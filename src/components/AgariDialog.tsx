@@ -1,5 +1,6 @@
 import type { AgariResult } from '../mahjong-bridge';
 import { yakuName } from '../mahjong-bridge';
+import { TileView } from './TileView';
 
 interface AgariDialogProps {
   result: AgariResult;
@@ -22,20 +23,62 @@ export function AgariDialog({ result, winnerName, onClose }: AgariDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-green-950 border-2 border-yellow-400 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl">
+      <div className="bg-green-950 border-2 border-yellow-400 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-3xl font-bold text-yellow-400 text-center mb-4">
           和了
         </h2>
         <p className="text-center text-lg mb-4">{winnerName}</p>
 
-        <div className="space-y-2 mb-6">
+        {/* 役一覧 */}
+        <div className="space-y-2 mb-4">
           {result.yakus.map((yaku, i) => (
             <div key={i} className="flex justify-between px-4 py-1 bg-green-900/50 rounded">
               <span>{yakuName(yaku.id)}</span>
               <span className="text-amber-300">{yaku.han}翻</span>
             </div>
           ))}
+          {/* ドラ */}
+          {(result.dora_count ?? 0) > 0 && (
+            <div className="flex justify-between px-4 py-1 bg-green-900/50 rounded">
+              <span>ドラ</span>
+              <span className="text-amber-300">{result.dora_count}翻</span>
+            </div>
+          )}
+          {/* 赤ドラ */}
+          {(result.aka_count ?? 0) > 0 && (
+            <div className="flex justify-between px-4 py-1 bg-green-900/50 rounded">
+              <span>赤ドラ</span>
+              <span className="text-amber-300">{result.aka_count}翻</span>
+            </div>
+          )}
+          {/* 裏ドラ */}
+          {(result.uradora_count ?? 0) > 0 && (
+            <div className="flex justify-between px-4 py-1 bg-green-900/50 rounded">
+              <span>裏ドラ</span>
+              <span className="text-amber-300">{result.uradora_count}翻</span>
+            </div>
+          )}
         </div>
+
+        {/* ドラ牌表示 */}
+        {result.dora && result.dora.length > 0 && (
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <div className="text-center">
+              <div className="text-xs text-green-400 mb-1">ドラ</div>
+              <div className="flex gap-1 justify-center">
+                {result.dora.map((t, i) => <TileView key={i} tile={t} small />)}
+              </div>
+            </div>
+            {result.uradora && result.uradora.length > 0 && (
+              <div className="text-center">
+                <div className="text-xs text-green-400 mb-1">裏ドラ</div>
+                <div className="flex gap-1 justify-center">
+                  {result.uradora.map((t, i) => <TileView key={i} tile={t} small />)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="text-center space-y-1 mb-6">
           <div className="text-sm text-green-300">

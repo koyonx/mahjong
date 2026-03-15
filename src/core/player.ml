@@ -16,6 +16,7 @@ type t = {
   is_ippatsu : bool;           (** 一発の可能性があるか *)
   jikaze : Tile.jihai;         (** 自風 *)
   score : int;                 (** 持ち点 *)
+  aka_count : int;             (** 赤ドラ枚数 *)
 }
 
 (** プレイヤーを初期化 *)
@@ -27,6 +28,7 @@ let create (jikaze : Tile.jihai) : t = {
   is_ippatsu = false;
   jikaze;
   score = 25000;
+  aka_count = 0;
 }
 
 (** 門前か（副露なし、暗槓は除く） *)

@@ -37,9 +37,10 @@ let jikaze_of_seat (kyoku : int) (seat : int) : Tile.jihai =
   | 3 -> Tile.Pei
   | _ -> Tile.Ton
 
-(** 配牌 *)
-let deal (wall : Wall.t) : (Tile.tile list array * Wall.t) =
+(** 配牌（赤ドラ枚数も返す） *)
+let deal (wall : Wall.t) : (Tile.tile list array * int array * Wall.t) =
   let hands = Array.make 4 [] in
+  let aka_counts = Array.make 4 0 in
   let w = ref wall in
   (* 4枚ずつ3回 = 12枚 *)
   for round_num = 0 to 2 do
@@ -47,8 +48,9 @@ let deal (wall : Wall.t) : (Tile.tile list array * Wall.t) =
     for seat = 0 to 3 do
       for _ = 0 to 3 do
         match Wall.draw !w with
-        | Some (tile, new_wall) ->
+        | Some (tile, is_red, new_wall) ->
           hands.(seat) <- tile :: hands.(seat);
+          if is_red then aka_counts.(seat) <- aka_counts.(seat) + 1;
           w := new_wall
         | None -> ()
       done
@@ -57,28 +59,28 @@ let deal (wall : Wall.t) : (Tile.tile list array * Wall.t) =
   (* 1枚ずつ1回 = 13枚 *)
   for seat = 0 to 3 do
     match Wall.draw !w with
-    | Some (tile, new_wall) ->
+    | Some (tile, is_red, new_wall) ->
       hands.(seat) <- tile :: hands.(seat);
+      if is_red then aka_counts.(seat) <- aka_counts.(seat) + 1;
       w := new_wall
     | None -> ()
   done;
-  (hands, !w)
+  (hands, aka_counts, !w)
 
 (** 新しい局を開始 *)
 let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int)
     (seat_offset : int) (scores : int array) : round =
   let wall = Wall.create () in
-  let (dealt_hands, wall_after_deal) = deal wall in
+  let (dealt_hands, aka_counts, wall_after_deal) = deal wall in
   (* 親(東家)のseat: kyokuとoffsetで決定 *)
   let oya = ((kyoku - 1) + seat_offset) mod 4 in
   let players = Array.init 4 (fun i ->
-    (* seat i の自風: 親からの距離で決定 *)
     let dist = (i - oya + 4) mod 4 in
     let jikaze = match dist with
       | 0 -> Tile.Ton | 1 -> Tile.Nan | 2 -> Tile.Sha | _ -> Tile.Pei
     in
     let p = Player.create jikaze in
-    { p with hand = Hand.make dealt_hands.(i); score = scores.(i) }
+    { p with hand = Hand.make dealt_hands.(i); score = scores.(i); aka_count = aka_counts.(i) }
   ) in
   {
     bakaze;
@@ -106,10 +108,11 @@ let draw_tile (game : round) : (round, string) result =
   else
     match Wall.draw game.wall with
     | None -> Ok { game with phase = RoundEnd }  (* 流局 *)
-    | Some (tile, new_wall) ->
+    | Some (tile, is_red, new_wall) ->
       let player = game.players.(game.current_turn) in
       match Player.tsumo tile player with
       | Ok new_player ->
+        let new_player = if is_red then { new_player with aka_count = new_player.aka_count + 1 } else new_player in
         let players = Array.copy game.players in
         players.(game.current_turn) <- new_player;
         Ok { game with wall = new_wall; players; phase = WaitingDiscard }
@@ -156,6 +159,8 @@ let ron (game : round) (winner : int) : (round, string) result =
     else
     let tiles = tile :: player.hand.tiles in
     let dora_count = Wall.count_dora game.wall game.kan_count tiles in
+    let uradora_count = if player.is_riichi then Wall.count_uradora game.wall game.kan_count tiles else 0 in
+    let total_dora = dora_count + uradora_count + player.aka_count in
     let ctx = {
       Yaku.is_tsumo = false;
       is_riichi = player.is_riichi;
@@ -166,7 +171,7 @@ let ron (game : round) (winner : int) : (round, string) result =
       is_menzen = Player.is_menzen player;
       is_haitei = false;
       is_houtei = is_haitei game;
-      dora_count;
+      dora_count = total_dora;
       bakaze = game.bakaze;
       jikaze = player.jikaze;
     } in
@@ -186,6 +191,8 @@ let ron (game : round) (winner : int) : (round, string) result =
 let tsumo_agari (game : round) : (round, string) result =
   let player = game.players.(game.current_turn) in
   let dora_count = Wall.count_dora game.wall game.kan_count player.hand.tiles in
+  let uradora_count = if player.is_riichi then Wall.count_uradora game.wall game.kan_count player.hand.tiles else 0 in
+  let total_dora = dora_count + uradora_count + player.aka_count in
   let ctx = {
     Yaku.is_tsumo = true;
     is_riichi = player.is_riichi;
@@ -196,7 +203,7 @@ let tsumo_agari (game : round) : (round, string) result =
     is_menzen = Player.is_menzen player;
     is_haitei = is_haitei game;
     is_houtei = false;
-    dora_count;
+    dora_count = total_dora;
     bakaze = game.bakaze;
     jikaze = player.jikaze;
   } in

@@ -92,7 +92,8 @@ let player_to_json (p : Player.t) : string =
     ("hand", hand); ("tsumo", tsumo_tile); ("furo", furo);
     ("kawa", kawa); ("score", json_int p.score);
     ("is_riichi", json_bool p.is_riichi); ("is_menzen", json_bool (Player.is_menzen p));
-    ("jikaze", json_str jikaze_str)
+    ("jikaze", json_str jikaze_str);
+    ("aka_count", json_int p.aka_count)
   ]
 
 let game_state_to_json (game : Game.round) : string =
@@ -177,14 +178,21 @@ let check_tsumo () : string =
   | None -> json_null
   | Some game ->
     let player = game.players.(game.current_turn) in
+    let dora_n = Wall.count_dora game.wall game.kan_count player.hand.tiles in
+    let uradora_n = if player.is_riichi then Wall.count_uradora game.wall game.kan_count player.hand.tiles else 0 in
+    let aka_n = player.aka_count in
     let ctx = {
       Yaku.is_tsumo = true; is_riichi = player.is_riichi; is_double_riichi = false;
-      is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = 0;
+      is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = dora_n + uradora_n + aka_n;
       bakaze = game.bakaze; jikaze = player.jikaze;
     } in
     let is_oya = player.jikaze = Tile.Ton in
     match Scoring.score_hand player.hand.tiles ctx is_oya with
     | Some result ->
+      let dora_tiles = json_arr (List.map tile_to_json (List.map Wall.dora_of_indicator (Wall.dora_indicators game.wall game.kan_count))) in
+      let uradora_tiles = if player.is_riichi then
+        json_arr (List.map tile_to_json (List.map Wall.dora_of_indicator (Wall.uradora_indicators game.wall game.kan_count)))
+      else json_arr [] in
       (match Game.tsumo_agari game with
        | Ok new_game ->
          game_ref := Some new_game;
@@ -194,7 +202,12 @@ let check_tsumo () : string =
            ("han", json_int result.han_detail);
            ("fu", json_int result.fu_detail);
            ("total", json_int result.total);
-           ("payment", payment_to_json result.payments)
+           ("payment", payment_to_json result.payments);
+           ("dora", dora_tiles);
+           ("uradora", uradora_tiles);
+           ("dora_count", json_int dora_n);
+           ("uradora_count", json_int uradora_n);
+           ("aka_count", json_int aka_n)
          ]
        | Error _ -> json_null)
     | None -> json_null
@@ -208,14 +221,21 @@ let check_ron seat : string =
     | Some tile ->
       let player = game.players.(seat) in
       let tiles = tile :: player.hand.tiles in
+      let dora_n = Wall.count_dora game.wall game.kan_count tiles in
+      let uradora_n = if player.is_riichi then Wall.count_uradora game.wall game.kan_count tiles else 0 in
+      let aka_n = player.aka_count in
       let ctx = {
         Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = false;
-        is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = 0;
+        is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = dora_n + uradora_n + aka_n;
         bakaze = game.bakaze; jikaze = player.jikaze;
       } in
       let is_oya = player.jikaze = Tile.Ton in
       (match Scoring.score_hand tiles ctx is_oya with
        | Some result ->
+         let dora_tiles = json_arr (List.map tile_to_json (List.map Wall.dora_of_indicator (Wall.dora_indicators game.wall game.kan_count))) in
+         let uradora_tiles = if player.is_riichi then
+           json_arr (List.map tile_to_json (List.map Wall.dora_of_indicator (Wall.uradora_indicators game.wall game.kan_count)))
+         else json_arr [] in
          (match Game.ron game seat with
           | Ok new_game ->
             game_ref := Some new_game;
@@ -225,7 +245,12 @@ let check_ron seat : string =
               ("han", json_int result.han_detail);
               ("fu", json_int result.fu_detail);
               ("total", json_int result.total);
-              ("payment", payment_to_json result.payments)
+              ("payment", payment_to_json result.payments);
+              ("dora", dora_tiles);
+              ("uradora", uradora_tiles);
+              ("dora_count", json_int dora_n);
+              ("uradora_count", json_int uradora_n);
+              ("aka_count", json_int aka_n)
             ]
           | Error _ -> json_null)
        | None -> json_null)
@@ -357,6 +382,21 @@ let do_chi seat t1_kind t1_suit t1_num t2_kind t2_suit t2_num : string =
         game_state_to_json new_game
       | Error _ -> json_null
 
+(** 4カン流局チェック: 異なるプレイヤーによる4回目のカンで流局 *)
+let check_4kan (game : Game.round) : Game.round =
+  if game.kan_count >= 4 then
+    (* 同一プレイヤーの4カンか確認 *)
+    let kan_players = Array.to_list (Array.mapi (fun i (p : Player.t) ->
+      let kan_n = List.length (List.filter (fun f ->
+        match f with Player.Minkan _ | Player.Ankan _ -> true | _ -> false
+      ) p.furo_list) in
+      (i, kan_n)
+    ) game.players) in
+    let has_4kan_player = List.exists (fun (_, n) -> n >= 4) kan_players in
+    if has_4kan_player then game  (* 四槓子の可能性 *)
+    else { game with phase = Game.RoundEnd }  (* 流局 *)
+  else game
+
 (** 明槓可否判定 *)
 let can_minkan seat : bool =
   match !game_ref with
@@ -388,6 +428,7 @@ let do_minkan seat : string =
           kan_count = game.kan_count + 1;
           last_discard = None; last_discard_player = None;
         } in
+        let new_game = check_4kan new_game in
         game_ref := Some new_game;
         game_state_to_json new_game
       | Error _ -> json_null
@@ -426,6 +467,7 @@ let do_ankan seat kind suit number : string =
         phase = Game.WaitingDraw;
         kan_count = game.kan_count + 1;
       } in
+      let new_game = check_4kan new_game in
       game_ref := Some new_game;
       game_state_to_json new_game
     | Error _ -> json_null
@@ -462,6 +504,7 @@ let do_kakan seat kind suit number : string =
         phase = Game.WaitingDraw;
         kan_count = game.kan_count + 1;
       } in
+      let new_game = check_4kan new_game in
       game_ref := Some new_game;
       game_state_to_json new_game
     | Error _ -> json_null

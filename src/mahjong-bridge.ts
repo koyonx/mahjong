@@ -82,6 +82,11 @@ export interface AgariResult {
   fu: number;
   total: number;
   payment: Payment;
+  dora: Tile[];
+  uradora: Tile[];
+  dora_count: number;
+  uradora_count: number;
+  aka_count: number;
 }
 
 // === Melange出力のインポート ===

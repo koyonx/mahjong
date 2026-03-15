@@ -224,7 +224,7 @@ let test_wall_create _ =
 let test_wall_draw _ =
   let wall = Wall.create_with_seed 42 in
   match Wall.draw wall with
-  | Some (_, new_wall) ->
+  | Some (_, _, new_wall) ->
     assert_equal 121 (Wall.remaining new_wall)
   | None -> assert_failure "should draw"
 
