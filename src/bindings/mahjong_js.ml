@@ -388,6 +388,29 @@ let can_declare_riichi seat : bool =
         ) tiles;
         !found
 
+(** リーチ宣言時に捨てられる牌のリスト（捨ててもテンパイを維持できる牌） *)
+let riichi_discard_candidates seat : string =
+  match !game_ref with
+  | None -> json_arr []
+  | Some game ->
+    let player = game.players.(seat) in
+    let tiles = player.hand.tiles in
+    if List.length tiles <> 14 then json_arr []
+    else
+      let tried = ref [] in
+      let candidates = ref [] in
+      List.iter (fun t ->
+        if not (List.exists (fun s -> Tile.compare s t = 0) !tried) then begin
+          tried := t :: !tried;
+          match Mentsu.remove_one t tiles with
+          | Some rest ->
+            if Hand.tenpai_tiles (Hand.make rest) <> [] then
+              candidates := tile_to_json t :: !candidates
+          | None -> ()
+        end
+      ) tiles;
+      json_arr (List.rev !candidates)
+
 let next_round oya_won : string =
   match !game_ref with
   | None -> json_null

@@ -11,6 +11,7 @@ interface PlayerHandProps {
   onSelectTile?: (index: number) => void;
   compact?: boolean;
   vertical?: boolean;
+  disabledTiles?: Tile[];  // これらの牌は暗く表示（リーチ時の候補外）
 }
 
 function FuroGroup({ furo }: { furo: Furo }) {
@@ -36,6 +37,7 @@ export function PlayerHand({
   onSelectTile,
   compact,
   vertical,
+  disabledTiles,
 }: PlayerHandProps) {
   const handTiles = player.hand ?? [];
   const tsumoTile = player.tsumo;
@@ -94,18 +96,24 @@ export function PlayerHand({
           gap: vertical ? 1 : 2,
         }}>
           {isHuman ? (
-            handTiles.map((tile, i) => (
+            handTiles.map((tile, i) => {
+              const isDisabled = disabledTiles && !disabledTiles.some(
+                c => c.kind === tile.kind && c.suit === tile.suit && c.number === tile.number
+              );
+              return (
               <div
                 key={`${tile.kind}-${tile.suit}-${tile.number}-${i}`}
                 style={{
                   transition: 'transform 0.3s ease, opacity 0.3s ease',
+                  opacity: isDisabled ? 0.35 : 1,
+                  filter: isDisabled ? 'grayscale(0.8)' : undefined,
                 }}
               >
                 <TileView
                   tile={tile}
                   small={compact}
-                  selected={selectedTile === i}
-                  onClick={isCurrentTurn && onSelectTile
+                  selected={!isDisabled && selectedTile === i}
+                  onClick={!isDisabled && isCurrentTurn && onSelectTile
                     ? () => {
                         if (selectedTile === i && onDiscard) {
                           onDiscard(tile);
@@ -117,7 +125,8 @@ export function PlayerHand({
                   }
                 />
               </div>
-            ))
+              );
+            })
           ) : (
             // 他プレイヤー: 裏面表示
             Array.from({ length: player.hand_count ?? (handTiles.length + (tsumoTile ? 1 : 0)) }, (_, i) => (
@@ -127,13 +136,21 @@ export function PlayerHand({
         </div>
 
         {/* ツモ牌（右端に分離） */}
-        {isHuman && tsumoTile && (
-          <div style={{ marginLeft: 12, transition: 'transform 0.3s ease' }}>
+        {isHuman && tsumoTile && (() => {
+          const tsumoDisabled = disabledTiles && !disabledTiles.some(
+            c => c.kind === tsumoTile.kind && c.suit === tsumoTile.suit && c.number === tsumoTile.number
+          );
+          return (
+          <div style={{
+            marginLeft: 12, transition: 'transform 0.3s ease',
+            opacity: tsumoDisabled ? 0.35 : 1,
+            filter: tsumoDisabled ? 'grayscale(0.8)' : undefined,
+          }}>
             <TileView
               tile={tsumoTile}
               small={compact}
-              selected={selectedTile === handTiles.length}
-              onClick={isCurrentTurn && onSelectTile
+              selected={!tsumoDisabled && selectedTile === handTiles.length}
+              onClick={!tsumoDisabled && isCurrentTurn && onSelectTile
                 ? () => {
                     const tsumoIdx = handTiles.length;
                     if (selectedTile === tsumoIdx && onDiscard) {
@@ -146,7 +163,8 @@ export function PlayerHand({
               }
             />
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

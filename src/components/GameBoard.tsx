@@ -6,7 +6,7 @@ import {
   declareRiichi, aiDecide, kazeToJa,
   canPon, doPon, canChi, doChi,
   canMinkan, doMinkan, canAnkan, doAnkan, canKakan, doKakan,
-  canDeclareRiichi,
+  canDeclareRiichi, riichiDiscardCandidates,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
@@ -54,20 +54,32 @@ export function GameBoard({ onBack }: GameBoardProps) {
     }, 300);
   }, []);
 
+  const [riichiCandidates, setRiichiCandidates] = useState<Tile[]>([]);
+
   const handleRiichi = useCallback(() => {
+    const candidates = riichiDiscardCandidates(HUMAN_SEAT);
     setRiichiMode(true);
+    setRiichiCandidates(candidates);
     setMessage('リーチ！ 捨てる牌を選んでください');
   }, []);
+
+  const isTileInCandidates = (tile: Tile, candidates: Tile[]) =>
+    candidates.some(c => c.kind === tile.kind && c.suit === tile.suit && c.number === tile.number);
 
   const handleDiscard = useCallback((tile: Tile) => {
     if (!state || state.phase !== 'waiting_discard') return;
     if (state.current_turn !== HUMAN_SEAT) return;
 
+    // リーチ後は操作不可（自動ツモ切り）
+    if (state.players[HUMAN_SEAT].is_riichi) return;
+
     if (riichiMode) {
-      // リーチ宣言 → 打牌
+      // リーチ宣言時: 候補牌のみ捨てられる
+      if (!isTileInCandidates(tile, riichiCandidates)) return;
       const riichiState = declareRiichi();
       if (riichiState) setState(riichiState);
       setRiichiMode(false);
+      setRiichiCandidates([]);
     }
 
     const newState = discardTile(tile);
@@ -77,7 +89,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setTenpaiTiles([]);
     setMessage('');
     setTimeout(() => processAfterDiscard(newState), 300);
-  }, [state, riichiMode]);
+  }, [state, riichiMode, riichiCandidates]);
 
   const continueAfterCalls = useCallback(() => {
     setCallInfo(null);
@@ -173,6 +185,31 @@ export function GameBoard({ onBack }: GameBoardProps) {
       return;
     }
     if (drawnState.current_turn === HUMAN_SEAT) {
+      const player = drawnState.players[HUMAN_SEAT];
+
+      // リーチ済み: ツモ和了チェック → 自動ツモ切り
+      if (player.is_riichi) {
+        const tsumoResult = checkTsumoAgari();
+        if (tsumoResult) {
+          setMessage('ツモ和了できます！');
+          // ツモ和了はボタンで選択させる（スキップも可能）
+          return;
+        }
+        // 自動ツモ切り
+        setMessage('リーチ中...');
+        setTimeout(() => {
+          const tsumoTile = player.tsumo;
+          if (tsumoTile) {
+            const newState = discardTile(tsumoTile);
+            if (newState) {
+              setState(newState);
+              setTimeout(() => processAfterDiscard(newState), 300);
+            }
+          }
+        }, 500);
+        return;
+      }
+
       setMessage('牌を選んで捨ててください');
       setTenpaiTiles(getTenpaiTiles());
       const tsumoResult = checkTsumoAgari();
@@ -435,6 +472,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
             onDiscard={handleDiscard}
             selectedTile={selectedTile}
             onSelectTile={setSelectedTile}
+            disabledTiles={riichiMode ? riichiCandidates : undefined}
           />
         </div>
         {tenpaiTiles.length > 0 && (

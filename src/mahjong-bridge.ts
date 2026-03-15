@@ -158,6 +158,10 @@ export function canDeclareRiichi(seat: number): boolean {
   return mahjongJs.can_declare_riichi(seat);
 }
 
+export function riichiDiscardCandidates(seat: number): Tile[] {
+  try { return JSON.parse(mahjongJs.riichi_discard_candidates(seat)) as Tile[]; } catch { return []; }
+}
+
 export function nextRound(oyaWon: boolean): GameState | null {
   return parse<GameState>(mahjongJs.next_round(oyaWon));
 }
