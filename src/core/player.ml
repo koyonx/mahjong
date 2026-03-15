@@ -17,6 +17,9 @@ type t = {
   jikaze : Tile.jihai;         (** 自風 *)
   score : int;                 (** 持ち点 *)
   aka_count : int;             (** 赤ドラ枚数 *)
+  aka_manzu : bool;            (** 赤5萬を持っているか *)
+  aka_pinzu : bool;            (** 赤5筒を持っているか *)
+  aka_souzu : bool;            (** 赤5索を持っているか *)
 }
 
 (** プレイヤーを初期化 *)
@@ -29,6 +32,9 @@ let create (jikaze : Tile.jihai) : t = {
   jikaze;
   score = 25000;
   aka_count = 0;
+  aka_manzu = false;
+  aka_pinzu = false;
+  aka_souzu = false;
 }
 
 (** 門前か（副露なし、暗槓は除く） *)

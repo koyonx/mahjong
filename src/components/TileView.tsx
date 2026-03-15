@@ -129,10 +129,70 @@ function renderTileFace(tile: Tile, big: boolean) {
   );
 }
 
+/** 赤ドラ版: 全て赤色で描画 */
+function renderTileFaceRed(tile: Tile, big: boolean) {
+  const artSize = big ? 42 : 28;
+  if (tile.kind === 'suhai') {
+    switch (tile.suit) {
+      case 'manzu': {
+        const numSize = big ? 26 : 16;
+        const manSize = big ? 20 : 13;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, gap: 1 }}>
+            <span style={{ fontSize: numSize, fontWeight: 700, color: '#c41e3a', fontFamily: SERIF_FONT }}>{kanjiNumbers[tile.number]}</span>
+            <span style={{ fontSize: manSize, fontWeight: 700, color: '#c41e3a', fontFamily: SERIF_FONT }}>萬</span>
+          </div>
+        );
+      }
+      case 'pinzu': {
+        const positions = pinPositions[tile.number] ?? [];
+        const r = tile.number <= 2 ? 14 : tile.number <= 4 ? 11 : tile.number <= 6 ? 9 : 7;
+        return (
+          <svg viewBox="0 0 100 100" width={artSize} height={artSize}>
+            {positions.map(([cx, cy], i) => (
+              <g key={i}>
+                <circle cx={cx} cy={cy} r={r} fill="#c41e3a" />
+                <circle cx={cx} cy={cy} r={r * 0.55} fill="#fff0f0" />
+                <circle cx={cx} cy={cy} r={r * 0.22} fill="#c41e3a" />
+              </g>
+            ))}
+          </svg>
+        );
+      }
+      case 'souzu': {
+        const cols = tile.number <= 3 ? 1 : tile.number <= 6 ? 2 : 3;
+        const rows = Math.ceil(tile.number / cols);
+        const sticks: [number, number][] = [];
+        for (let i = 0; i < tile.number; i++) {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const x = cols === 1 ? 50 : cols === 2 ? 30 + col * 40 : 20 + col * 30;
+          const y = 12 + row * (75 / rows);
+          sticks.push([x, y]);
+        }
+        const stickH = Math.min(60 / rows, 30);
+        return (
+          <svg viewBox="0 0 100 100" width={artSize} height={artSize}>
+            {sticks.map(([x, y], i) => (
+              <g key={i}>
+                <rect x={x - 5} y={y} width="10" height={stickH} rx="2" fill="#c41e3a" />
+                <rect x={x - 6} y={y + stickH * 0.35} width="12" height="2" rx="1" fill="#8a1020" />
+                <rect x={x - 6} y={y + stickH * 0.65} width="12" height="2" rx="1" fill="#8a1020" />
+              </g>
+            ))}
+          </svg>
+        );
+      }
+    }
+  }
+  return renderTileFace(tile, big);
+}
+
 export function TileView({ tile, onClick, selected, small, faceDown, rotated }: TileViewProps) {
   const w = small ? 28 : 44;
   const h = small ? 38 : 60;
   const depth = small ? 3 : 5;
+  const isRed = tile.is_red === true;
 
   // rotated: 外側のサイズを幅↔高さ入れ替え
   const outerW = rotated ? h : w;
@@ -170,8 +230,10 @@ export function TileView({ tile, onClick, selected, small, faceDown, rotated }: 
       <div style={{
         width: w, height: h, borderRadius: 3,
         transform: rotated ? `rotate(90deg) translate(${(h - w) / 2}px, ${(h - w) / 2}px)` : undefined,
-        background: 'linear-gradient(175deg, #fefcf7 0%, #f0ead8 60%, #e4dcc8 100%)',
-        border: selected ? '2px solid #eab308' : '1px solid #c0b8a8',
+        background: isRed
+          ? 'linear-gradient(175deg, #fff0f0 0%, #ffe0d8 60%, #ffd0c4 100%)'
+          : 'linear-gradient(175deg, #fefcf7 0%, #f0ead8 60%, #e4dcc8 100%)',
+        border: selected ? '2px solid #eab308' : isRed ? '1px solid #d0a0a0' : '1px solid #c0b8a8',
         boxShadow: selected
           ? `0 ${depth}px 0 #c8a040, 0 ${depth + 4}px 12px rgba(234,179,8,0.3)`
           : `0 ${depth}px 0 #a09880, 0 ${depth + 2}px 4px rgba(0,0,0,0.2)`,
@@ -182,7 +244,7 @@ export function TileView({ tile, onClick, selected, small, faceDown, rotated }: 
           position: 'absolute', top: 0, left: 0, right: 0, height: 2,
           background: 'rgba(255,255,255,0.5)', borderRadius: '3px 3px 0 0',
         }} />
-        {renderTileFace(tile, !small)}
+        {isRed ? renderTileFaceRed(tile, !small) : renderTileFace(tile, !small)}
       </div>
     </div>
   );

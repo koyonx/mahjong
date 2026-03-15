@@ -13,14 +13,15 @@ let json_obj fields =
 let json_arr items =
   "[" ^ String.concat "," items ^ "]"
 
-let tile_to_json (tile : Tile.tile) : string =
+let tile_to_json_with_red (tile : Tile.tile) (is_red : bool) : string =
   match tile with
   | Tile.Suhai (suit, n) ->
     let suit_str = match suit with
       | Tile.Manzu -> "manzu" | Tile.Pinzu -> "pinzu" | Tile.Souzu -> "souzu"
     in
     json_obj [("kind", json_str "suhai"); ("suit", json_str suit_str);
-              ("number", json_int n); ("label", json_str (Tile.to_string tile))]
+              ("number", json_int n); ("label", json_str (Tile.to_string tile));
+              ("is_red", json_bool is_red)]
   | Tile.Jihai j ->
     let suit_str = match j with
       | Tile.Ton | Tile.Nan | Tile.Sha | Tile.Pei -> "kaze"
@@ -31,7 +32,11 @@ let tile_to_json (tile : Tile.tile) : string =
       | Tile.Haku -> 5 | Tile.Hatsu -> 6 | Tile.Chun -> 7
     in
     json_obj [("kind", json_str "jihai"); ("suit", json_str suit_str);
-              ("number", json_int number); ("label", json_str (Tile.to_string tile))]
+              ("number", json_int number); ("label", json_str (Tile.to_string tile));
+              ("is_red", json_bool false)]
+
+let tile_to_json (tile : Tile.tile) : string =
+  tile_to_json_with_red tile false
 
 let yaku_id_of (y : Yaku.yaku) : string =
   match y with
@@ -62,15 +67,27 @@ let payment_to_json (p : Scoring.payment) : string =
     json_obj [("kind", json_str "tsumo_ko"); ("oya_pay", json_int oya); ("ko_pay", json_int ko)]
 
 let player_to_json (p : Player.t) : string =
-  (* ツモ牌を分離: 手牌からツモ牌を除いたソート済みリスト + ツモ牌 *)
+  (* 赤ドラ判定付きの牌変換 *)
+  let tile_with_red (t : Tile.tile) (used_m : bool ref) (used_p : bool ref) (used_s : bool ref) : string =
+    match t with
+    | Tile.Suhai (Tile.Manzu, 5) when p.aka_manzu && not !used_m ->
+      used_m := true; tile_to_json_with_red t true
+    | Tile.Suhai (Tile.Pinzu, 5) when p.aka_pinzu && not !used_p ->
+      used_p := true; tile_to_json_with_red t true
+    | Tile.Suhai (Tile.Souzu, 5) when p.aka_souzu && not !used_s ->
+      used_s := true; tile_to_json_with_red t true
+    | _ -> tile_to_json t
+  in
+  let used_m = ref false and used_p = ref false and used_s = ref false in
+  (* ツモ牌を分離 *)
   let (sorted_hand, tsumo_tile) = match p.hand.tsumo with
     | Some t ->
       (match Mentsu.remove_one t p.hand.tiles with
-       | Some rest -> (List.sort Tile.compare rest, tile_to_json t)
+       | Some rest -> (List.sort Tile.compare rest, tile_with_red t used_m used_p used_s)
        | None -> (List.sort Tile.compare p.hand.tiles, json_null))
     | None -> (List.sort Tile.compare p.hand.tiles, json_null)
   in
-  let hand = json_arr (List.map tile_to_json sorted_hand) in
+  let hand = json_arr (List.map (fun t -> tile_with_red t used_m used_p used_s) sorted_hand) in
   let kawa = json_arr (List.rev_map tile_to_json p.kawa) in
   let jikaze_str = match p.jikaze with
     | Tile.Ton -> "ton" | Tile.Nan -> "nan"

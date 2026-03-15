@@ -37,12 +37,28 @@ let jikaze_of_seat (kyoku : int) (seat : int) : Tile.jihai =
   | 3 -> Tile.Pei
   | _ -> Tile.Ton
 
-(** 配牌（赤ドラ枚数も返す） *)
-let deal (wall : Wall.t) : (Tile.tile list array * int array * Wall.t) =
+(** 赤ドラ情報 *)
+type aka_info = {
+  count : int;
+  manzu : bool;
+  pinzu : bool;
+  souzu : bool;
+}
+
+let empty_aka = { count = 0; manzu = false; pinzu = false; souzu = false }
+
+let add_aka (info : aka_info) (tile : Tile.tile) : aka_info =
+  { count = info.count + 1;
+    manzu = info.manzu || (match tile with Tile.Suhai (Tile.Manzu, 5) -> true | _ -> false);
+    pinzu = info.pinzu || (match tile with Tile.Suhai (Tile.Pinzu, 5) -> true | _ -> false);
+    souzu = info.souzu || (match tile with Tile.Suhai (Tile.Souzu, 5) -> true | _ -> false);
+  }
+
+(** 配牌（赤ドラ情報も返す） *)
+let deal (wall : Wall.t) : (Tile.tile list array * aka_info array * Wall.t) =
   let hands = Array.make 4 [] in
-  let aka_counts = Array.make 4 0 in
+  let aka_infos = Array.make 4 empty_aka in
   let w = ref wall in
-  (* 4枚ずつ3回 = 12枚 *)
   for round_num = 0 to 2 do
     ignore round_num;
     for seat = 0 to 3 do
@@ -50,28 +66,27 @@ let deal (wall : Wall.t) : (Tile.tile list array * int array * Wall.t) =
         match Wall.draw !w with
         | Some (tile, is_red, new_wall) ->
           hands.(seat) <- tile :: hands.(seat);
-          if is_red then aka_counts.(seat) <- aka_counts.(seat) + 1;
+          if is_red then aka_infos.(seat) <- add_aka aka_infos.(seat) tile;
           w := new_wall
         | None -> ()
       done
     done
   done;
-  (* 1枚ずつ1回 = 13枚 *)
   for seat = 0 to 3 do
     match Wall.draw !w with
     | Some (tile, is_red, new_wall) ->
       hands.(seat) <- tile :: hands.(seat);
-      if is_red then aka_counts.(seat) <- aka_counts.(seat) + 1;
+      if is_red then aka_infos.(seat) <- add_aka aka_infos.(seat) tile;
       w := new_wall
     | None -> ()
   done;
-  (hands, aka_counts, !w)
+  (hands, aka_infos, !w)
 
 (** 新しい局を開始 *)
 let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int)
     (seat_offset : int) (scores : int array) : round =
   let wall = Wall.create () in
-  let (dealt_hands, aka_counts, wall_after_deal) = deal wall in
+  let (dealt_hands, aka_infos, wall_after_deal) = deal wall in
   (* 親(東家)のseat: kyokuとoffsetで決定 *)
   let oya = ((kyoku - 1) + seat_offset) mod 4 in
   let players = Array.init 4 (fun i ->
@@ -80,7 +95,9 @@ let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int
       | 0 -> Tile.Ton | 1 -> Tile.Nan | 2 -> Tile.Sha | _ -> Tile.Pei
     in
     let p = Player.create jikaze in
-    { p with hand = Hand.make dealt_hands.(i); score = scores.(i); aka_count = aka_counts.(i) }
+    let ai = aka_infos.(i) in
+    { p with hand = Hand.make dealt_hands.(i); score = scores.(i);
+      aka_count = ai.count; aka_manzu = ai.manzu; aka_pinzu = ai.pinzu; aka_souzu = ai.souzu }
   ) in
   {
     bakaze;
@@ -112,7 +129,14 @@ let draw_tile (game : round) : (round, string) result =
       let player = game.players.(game.current_turn) in
       match Player.tsumo tile player with
       | Ok new_player ->
-        let new_player = if is_red then { new_player with aka_count = new_player.aka_count + 1 } else new_player in
+        let new_player = if is_red then
+          { new_player with
+            aka_count = new_player.aka_count + 1;
+            aka_manzu = new_player.aka_manzu || (match tile with Tile.Suhai (Tile.Manzu, 5) -> true | _ -> false);
+            aka_pinzu = new_player.aka_pinzu || (match tile with Tile.Suhai (Tile.Pinzu, 5) -> true | _ -> false);
+            aka_souzu = new_player.aka_souzu || (match tile with Tile.Suhai (Tile.Souzu, 5) -> true | _ -> false);
+          }
+        else new_player in
         let players = Array.copy game.players in
         players.(game.current_turn) <- new_player;
         Ok { game with wall = new_wall; players; phase = WaitingDiscard }

@@ -10,6 +10,7 @@ export interface Tile {
   suit: 'manzu' | 'pinzu' | 'souzu' | 'kaze' | 'sangen';
   number: number;
   label: string;
+  is_red?: boolean;
 }
 
 export interface Furo {
