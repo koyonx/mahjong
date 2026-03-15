@@ -88,6 +88,9 @@ export interface AgariResult {
   dora_count: number;
   uradora_count: number;
   aka_count: number;
+  winner_hand: Tile[];
+  agari_tile: Tile | null;
+  is_tsumo: boolean;
 }
 
 // === Melange出力のインポート ===

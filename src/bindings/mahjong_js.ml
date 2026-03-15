@@ -210,6 +210,17 @@ let check_tsumo () : string =
       let uradora_tiles = if player.is_riichi then
         json_arr (List.map tile_to_json (List.map Wall.dora_of_indicator (Wall.uradora_indicators game.wall game.kan_count)))
       else json_arr [] in
+      let used_m = ref false and used_p = ref false and used_s = ref false in
+      let hand_json = json_arr (List.map (fun t ->
+        match t with
+        | Tile.Suhai (Tile.Manzu, 5) when player.aka_manzu && not !used_m ->
+          used_m := true; tile_to_json_with_red t true
+        | Tile.Suhai (Tile.Pinzu, 5) when player.aka_pinzu && not !used_p ->
+          used_p := true; tile_to_json_with_red t true
+        | Tile.Suhai (Tile.Souzu, 5) when player.aka_souzu && not !used_s ->
+          used_s := true; tile_to_json_with_red t true
+        | _ -> tile_to_json t
+      ) (List.sort Tile.compare player.hand.tiles)) in
       (match Game.tsumo_agari game with
        | Ok new_game ->
          game_ref := Some new_game;
@@ -224,7 +235,10 @@ let check_tsumo () : string =
            ("uradora", uradora_tiles);
            ("dora_count", json_int dora_n);
            ("uradora_count", json_int uradora_n);
-           ("aka_count", json_int aka_n)
+           ("aka_count", json_int aka_n);
+           ("winner_hand", hand_json);
+           ("agari_tile", json_null);
+           ("is_tsumo", json_bool true)
          ]
        | Error _ -> json_null)
     | None -> json_null
@@ -253,6 +267,17 @@ let check_ron seat : string =
          let uradora_tiles = if player.is_riichi then
            json_arr (List.map tile_to_json (List.map Wall.dora_of_indicator (Wall.uradora_indicators game.wall game.kan_count)))
          else json_arr [] in
+         let used_m = ref false and used_p = ref false and used_s = ref false in
+         let hand_json = json_arr (List.map (fun t ->
+           match t with
+           | Tile.Suhai (Tile.Manzu, 5) when player.aka_manzu && not !used_m ->
+             used_m := true; tile_to_json_with_red t true
+           | Tile.Suhai (Tile.Pinzu, 5) when player.aka_pinzu && not !used_p ->
+             used_p := true; tile_to_json_with_red t true
+           | Tile.Suhai (Tile.Souzu, 5) when player.aka_souzu && not !used_s ->
+             used_s := true; tile_to_json_with_red t true
+           | _ -> tile_to_json t
+         ) (List.sort Tile.compare player.hand.tiles)) in
          (match Game.ron game seat with
           | Ok new_game ->
             game_ref := Some new_game;
@@ -267,7 +292,10 @@ let check_ron seat : string =
               ("uradora", uradora_tiles);
               ("dora_count", json_int dora_n);
               ("uradora_count", json_int uradora_n);
-              ("aka_count", json_int aka_n)
+              ("aka_count", json_int aka_n);
+              ("winner_hand", hand_json);
+              ("agari_tile", tile_to_json tile);
+              ("is_tsumo", json_bool false)
             ]
           | Error _ -> json_null)
        | None -> json_null)
