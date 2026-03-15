@@ -29,6 +29,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [message, setMessage] = useState<string>('');
   const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][]; canMinkan: boolean; canRon: boolean } | null>(null);
   const [riichiMode, setRiichiMode] = useState(false);
+  const [chiSelectMode, setChiSelectMode] = useState(false);
 
   const handleStart = useCallback(() => {
     const newState = startGame();
@@ -221,6 +222,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
       if (newState) {
         setState(newState);
         setCallInfo(null);
+        setChiSelectMode(false);
         setMessage('チー！ 牌を捨ててください');
         setTenpaiTiles(getTenpaiTiles());
       }
@@ -290,6 +292,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
   const handleSkipCall = useCallback(() => {
     setCallInfo(null);
+    setChiSelectMode(false);
     setMessage('');
     continueAfterCalls();
   }, [continueAfterCalls]);
@@ -464,12 +467,12 @@ export function GameBoard({ onBack }: GameBoardProps) {
               color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
             }}>ポン</button>
           )}
-          {callInfo && callInfo.chiOptions.length > 0 && callInfo.chiOptions.map((opt, i) => (
-            <button key={i} onClick={() => handleChi(opt)} style={{
+          {callInfo && callInfo.chiOptions.length > 0 && !chiSelectMode && (
+            <button onClick={() => setChiSelectMode(true)} style={{
               padding: '8px 24px', background: '#2a8a4a', border: 'none', borderRadius: 6,
               color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
             }}>チー</button>
-          ))}
+          )}
           {callInfo && (
             <button onClick={handleSkipCall} style={{
               padding: '8px 24px', background: '#555', border: 'none', borderRadius: 6,
@@ -477,6 +480,30 @@ export function GameBoard({ onBack }: GameBoardProps) {
             }}>スキップ</button>
           )}
         </div>
+
+        {/* チー候補選択 */}
+        {chiSelectMode && callInfo && callInfo.chiOptions.length > 0 && (
+          <div style={{
+            display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8,
+            padding: '8px 12px', background: 'rgba(0,0,0,0.3)', borderRadius: 8,
+          }}>
+            {callInfo.chiOptions.map((opt, i) => (
+              <button key={i} onClick={() => handleChi(opt)} style={{
+                display: 'flex', gap: 2, padding: '4px 6px',
+                background: 'rgba(42,138,74,0.3)', border: '2px solid #2a8a4a',
+                borderRadius: 6, cursor: 'pointer', alignItems: 'center',
+              }}>
+                {opt.map((t, j) => (
+                  <TileView key={j} tile={t} small />
+                ))}
+              </button>
+            ))}
+            <button onClick={() => setChiSelectMode(false)} style={{
+              padding: '8px 16px', background: '#555', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            }}>戻る</button>
+          </div>
+        )}
       </div>
 
       {agariResult && <AgariDialog result={agariResult} winnerName={agariWinner} onClose={handleAgariClose} />}
