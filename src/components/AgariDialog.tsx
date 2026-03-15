@@ -30,11 +30,14 @@ export function AgariDialog({ result, winnerName, onClose }: AgariDialogProps) {
         <p className="text-center text-lg mb-4">{winnerName}</p>
 
         {/* 和了手牌（1列に収める） */}
-        {result.winner_hand && result.winner_hand.length > 0 && (
+        {result.winner_hand && result.winner_hand.length > 0 && (() => {
+          const totalTiles = result.winner_hand.length + (result.agari_tile ? 1 : 0);
+          const scale = totalTiles > 12 ? 0.7 : totalTiles > 9 ? 0.8 : 0.9;
+          return (
           <div className="mb-5" style={{
             display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
-            gap: 1, overflow: 'hidden',
-            transform: result.winner_hand.length > 10 ? 'scale(0.85)' : undefined,
+            gap: 1,
+            transform: `scale(${scale})`,
             transformOrigin: 'center bottom',
           }}>
             {result.winner_hand.map((t, i) => (
@@ -55,7 +58,8 @@ export function AgariDialog({ result, winnerName, onClose }: AgariDialogProps) {
               </>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* 役一覧 */}
         <div className="space-y-2 mb-4">
