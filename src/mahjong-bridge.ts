@@ -138,6 +138,10 @@ export function checkTsumoAgari(): AgariResult | null {
   return parse<AgariResult>(mahjongJs.check_tsumo());
 }
 
+export function canRon(seat: number): boolean {
+  return mahjongJs.can_ron(seat);
+}
+
 export function checkRon(winnerSeat: number): AgariResult | null {
   return parse<AgariResult>(mahjongJs.check_ron(winnerSeat));
 }

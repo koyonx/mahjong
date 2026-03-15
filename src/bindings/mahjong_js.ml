@@ -243,6 +243,30 @@ let check_tsumo () : string =
        | Error _ -> json_null)
     | None -> json_null
 
+(** ロン可否判定（副作用なし） *)
+let can_ron seat : bool =
+  match !game_ref with
+  | None -> false
+  | Some game ->
+    match game.last_discard with
+    | None -> false
+    | Some tile ->
+      let player = game.players.(seat) in
+      (* 振聴チェック *)
+      if List.exists (fun t -> Tile.compare t tile = 0) player.kawa then false
+      else
+        let tiles = tile :: player.hand.tiles in
+        let ctx = {
+          Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = false;
+          is_ippatsu = false; is_tenhou = false; is_chiihou = false;
+          is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false;
+          dora_count = 0; bakaze = game.bakaze; jikaze = player.jikaze;
+        } in
+        let is_oya = player.jikaze = Tile.Ton in
+        match Scoring.score_hand tiles ctx is_oya with
+        | Some _ -> true
+        | None -> false
+
 let check_ron seat : string =
   match !game_ref with
   | None -> json_null

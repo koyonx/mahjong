@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { Tile, GameState, AgariResult } from '../mahjong-bridge';
 import {
   startGame, drawTile, discardTile, advanceTurn,
-  checkTsumoAgari, checkRon, getTenpaiTiles, nextRound,
+  checkTsumoAgari, canRon, checkRon, getTenpaiTiles, nextRound,
   declareRiichi, aiDecide, kazeToJa,
   canPon, doPon, canChi, doChi,
   canMinkan, doMinkan, canAnkan, doAnkan, canKakan, doKakan,
@@ -95,13 +95,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
     // 人間のロン・ポン・チー・明槓判定
     if (currentState.current_turn !== HUMAN_SEAT) {
-      // ロン可否を事前チェック（checkRonは副作用があるので呼ばない）
-      // 代わりにstate.last_discardでテンパイ牌と照合
-      const lastTile = currentState.last_discard;
-      const humanTenpai = getTenpaiTiles();
-      const humanCanRon = lastTile != null && humanTenpai.some(t =>
-        t.kind === lastTile.kind && t.suit === lastTile.suit && t.number === lastTile.number
-      );
+      const humanCanRon = canRon(HUMAN_SEAT);
 
       const ponAvail = canPon(HUMAN_SEAT);
       const chiOptions = canChi(HUMAN_SEAT);
