@@ -6,6 +6,7 @@ import {
   declareRiichi, aiDecide, kazeToJa,
   canPon, doPon, canChi, doChi,
   canMinkan, doMinkan, canAnkan, doAnkan, canKakan, doKakan,
+  canDeclareRiichi,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
@@ -364,8 +365,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const ankanTiles = isMyTurn ? canAnkan(HUMAN_SEAT) : [];
   const kakanTiles = isMyTurn ? canKakan(HUMAN_SEAT) : [];
   const myPlayer = state.players[HUMAN_SEAT];
-  const canRiichi = isMyTurn && !myPlayer.is_riichi && myPlayer.is_menzen
-    && myPlayer.score >= 1000 && tenpaiTiles.length > 0;
+  const canRiichi = isMyTurn && canDeclareRiichi(HUMAN_SEAT);
 
   return (
     <div style={{

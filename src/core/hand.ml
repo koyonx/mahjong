@@ -47,7 +47,7 @@ let is_agari hand =
 let agari_patterns hand =
   Mentsu.find_agari_patterns hand.tiles
 
-(** テンパイ判定: 何か1枚加えれば和了になるか *)
+(** テンパイ判定: 何か1枚加えれば和了になるか（13枚の手牌用） *)
 let tenpai_tiles hand =
   if count hand <> 13 then []
   else

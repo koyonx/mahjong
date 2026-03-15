@@ -339,7 +339,54 @@ let get_tenpai () : string =
   | None -> json_arr []
   | Some game ->
     let player = game.players.(game.current_turn) in
-    json_arr (List.map tile_to_json (Hand.tenpai_tiles player.hand))
+    let tiles = player.hand.tiles in
+    if List.length tiles = 13 then
+      json_arr (List.map tile_to_json (Hand.tenpai_tiles player.hand))
+    else if List.length tiles = 14 then
+      (* 14枚: 各牌を1枚ずつ除いてテンパイ牌を集める *)
+      let all_waits = ref [] in
+      let tried = ref [] in
+      List.iter (fun t ->
+        if not (List.exists (fun s -> Tile.compare s t = 0) !tried) then begin
+          tried := t :: !tried;
+          match Mentsu.remove_one t tiles with
+          | Some rest ->
+            let waits = Hand.tenpai_tiles (Hand.make rest) in
+            List.iter (fun w ->
+              if not (List.exists (fun x -> Tile.compare x w = 0) !all_waits) then
+                all_waits := w :: !all_waits
+            ) waits
+          | None -> ()
+        end
+      ) tiles;
+      json_arr (List.map tile_to_json !all_waits)
+    else json_arr []
+
+(** リーチ可能か（14枚手牌から1枚捨ててテンパイになるか） *)
+let can_declare_riichi seat : bool =
+  match !game_ref with
+  | None -> false
+  | Some game ->
+    let player = game.players.(seat) in
+    if player.is_riichi then false
+    else if not (Player.is_menzen player) then false
+    else if player.score < 1000 then false
+    else
+      let tiles = player.hand.tiles in
+      if List.length tiles <> 14 then false
+      else
+        let tried = ref [] in
+        let found = ref false in
+        List.iter (fun t ->
+          if not !found && not (List.exists (fun s -> Tile.compare s t = 0) !tried) then begin
+            tried := t :: !tried;
+            match Mentsu.remove_one t tiles with
+            | Some rest ->
+              if Hand.tenpai_tiles (Hand.make rest) <> [] then found := true
+            | None -> ()
+          end
+        ) tiles;
+        !found
 
 let next_round oya_won : string =
   match !game_ref with
