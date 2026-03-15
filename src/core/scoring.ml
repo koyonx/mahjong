@@ -94,11 +94,11 @@ let calculate (info : agari_info) : payment =
   end
 
 (** 全体の点数計算（役判定→符計算→点数計算） *)
-let score_hand (tiles : Tile.tile list) (ctx : Yaku.agari_context) (is_oya : bool) : score_result option =
-  match Yaku.judge tiles ctx with
+let score_hand ?(furo_count=0) ?(furo_mentsu=[]) (tiles : Tile.tile list) (ctx : Yaku.agari_context) (is_oya : bool) : score_result option =
+  match Yaku.judge ~furo_count ~furo_mentsu tiles ctx with
   | None -> None
   | Some (yakus, han) ->
-    let patterns = Mentsu.find_agari_patterns tiles in
+    let patterns = Mentsu.find_agari_patterns_furo tiles furo_count in
     let fu =
       if List.exists (fun y -> y = Yaku.Chiitoitsu) yakus then 25
       else

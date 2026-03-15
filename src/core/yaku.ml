@@ -488,15 +488,32 @@ let calc_han (yakus : yaku list) (is_menzen : bool) : int =
   ) 0 yakus in
   base
 
+(** 副露をMentsu型に変換 *)
+let furo_to_mentsu (furo : Player.furo) : Mentsu.mentsu =
+  match furo with
+  | Player.Chi (t1, t2, t3) -> Mentsu.Shuntsu (t1, t2, t3)
+  | Player.Pon t -> Mentsu.Koutsu t
+  | Player.Minkan t -> Mentsu.Kantsu t
+  | Player.Ankan t -> Mentsu.Kantsu t
+
 (** 全手牌から最も高い役の組み合わせを判定 *)
-let judge (tiles : Tile.tile list) (ctx : agari_context) : (yaku list * int) option =
-  (* 特殊形チェック *)
+let judge ?(furo_count=0) ?(furo_mentsu=[]) (tiles : Tile.tile list) (ctx : agari_context) : (yaku list * int) option =
+  (* 副露の面子 *)
+  let extra_mentsu = List.map furo_to_mentsu furo_mentsu in
+
+  (* 特殊形チェック（門前のみ） *)
   let special_yakus = ref [] in
-  if check_kokushi tiles then special_yakus := [Kokushi];
-  if check_chiitoitsu tiles then special_yakus := [Chiitoitsu];
+  if furo_count = 0 then begin
+    if check_kokushi tiles then special_yakus := [Kokushi];
+    if check_chiitoitsu tiles then special_yakus := [Chiitoitsu]
+  end;
 
   (* 通常形チェック *)
-  let patterns = Mentsu.find_agari_patterns tiles in
+  let patterns = Mentsu.find_agari_patterns_furo tiles furo_count in
+  (* 副露の面子を加えた完全なパターンにする *)
+  let patterns = List.map (fun (p : Mentsu.agari_pattern) ->
+    { p with Mentsu.mentsu_list = p.mentsu_list @ extra_mentsu }
+  ) patterns in
   let normal_results = List.map (fun p ->
     let yakus = judge_yaku p ctx in
     let han = calc_han yakus ctx.is_menzen in

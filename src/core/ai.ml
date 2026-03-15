@@ -133,7 +133,9 @@ let decide (player : Player.t) (bakaze : Tile.jihai) : action =
     jikaze = player.jikaze;
   } in
   let is_oya = player.jikaze = Tile.Ton in
-  match Scoring.score_hand player.hand.tiles ctx is_oya with
+  let furo_count = List.length player.furo_list in
+  let furo_mentsu = player.furo_list in
+  match Scoring.score_hand ~furo_count ~furo_mentsu player.hand.tiles ctx is_oya with
   | Some _ -> TsumoAgari
   | None ->
     let tile = choose_discard player.hand.tiles in

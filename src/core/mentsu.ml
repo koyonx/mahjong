@@ -107,6 +107,66 @@ let find_agari_patterns (tiles : Tile.tile list) : agari_pattern list =
     | None -> []
   ) unique_jantai_candidates
 
+(** 副露を考慮した和了パターン探索 *)
+let find_agari_patterns_furo (tiles : Tile.tile list) (furo_count : int) : agari_pattern list =
+  let needed = 4 - furo_count in
+  let sorted = List.sort Tile.compare tiles in
+
+  let rec extract_mentsu (remaining : Tile.tile list) (acc_mentsu : mentsu list) : (mentsu list * Tile.tile list) list =
+    match remaining with
+    | [] -> [(List.rev acc_mentsu, [])]
+    | t1 :: rest ->
+      let results = ref [] in
+      (match rest with
+       | t2 :: t3 :: rest2 when is_koutsu t1 t2 t3 ->
+         let sub = extract_mentsu rest2 (Koutsu t1 :: acc_mentsu) in
+         results := sub @ !results
+       | _ -> ());
+      (match t1 with
+       | Tile.Suhai (suit, n) ->
+         let t2 = Tile.Suhai (suit, n + 1) in
+         let t3 = Tile.Suhai (suit, n + 2) in
+         (match remove_one t2 rest with
+          | Some rest_after_t2 ->
+            (match remove_one t3 rest_after_t2 with
+             | Some rest_after_t3 ->
+               let sub = extract_mentsu rest_after_t3 (Shuntsu (t1, t2, t3) :: acc_mentsu) in
+               results := sub @ !results
+             | None -> ())
+          | None -> ())
+       | _ -> ());
+      !results
+  in
+
+  let unique_jantai_candidates =
+    let rec aux seen = function
+      | [] -> []
+      | t :: rest ->
+        if List.exists (fun s -> Tile.compare s t = 0) seen then aux seen rest
+        else
+          let count = List.length (List.filter (fun x -> Tile.compare x t = 0) sorted) in
+          if count >= 2 then t :: aux (t :: seen) rest
+          else aux (t :: seen) rest
+    in
+    aux [] sorted
+  in
+
+  List.concat_map (fun jantai ->
+    match remove_one jantai sorted with
+    | Some rest1 ->
+      (match remove_one jantai rest1 with
+       | Some rest_without_pair ->
+         let mentsu_results = extract_mentsu (List.sort Tile.compare rest_without_pair) [] in
+         List.filter_map (fun (ms, leftover) ->
+           if leftover = [] && List.length ms = needed then
+             Some { mentsu_list = ms; jantai }
+           else
+             None
+         ) mentsu_results
+       | None -> [])
+    | None -> []
+  ) unique_jantai_candidates
+
 (** 和了判定: 14枚の手牌が4面子1雀頭に分解できるか *)
 let is_agari (tiles : Tile.tile list) : bool =
   List.length tiles = 14 && find_agari_patterns tiles <> []

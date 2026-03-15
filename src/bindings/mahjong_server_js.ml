@@ -256,7 +256,7 @@ let check_tsumo room_id : string =
       bakaze = game.bakaze; jikaze = player.jikaze;
     } in
     let is_oya = player.jikaze = Tile.Ton in
-    match Scoring.score_hand player.hand.tiles ctx is_oya with
+    match Scoring.score_hand ~furo_count:(List.length player.furo_list) ~furo_mentsu:player.furo_list player.hand.tiles ctx is_oya with
     | Some result ->
       (match Game.tsumo_agari game with
        | Ok new_game ->
@@ -288,7 +288,7 @@ let check_ron room_id seat : string =
         bakaze = game.bakaze; jikaze = player.jikaze;
       } in
       let is_oya = player.jikaze = Tile.Ton in
-      (match Scoring.score_hand tiles ctx is_oya with
+      (match Scoring.score_hand ~furo_count:(List.length player.furo_list) ~furo_mentsu:player.furo_list tiles ctx is_oya with
        | Some result ->
          (match Game.ron game seat with
           | Ok new_game ->

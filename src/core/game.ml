@@ -200,7 +200,9 @@ let ron (game : round) (winner : int) : (round, string) result =
       jikaze = player.jikaze;
     } in
     let is_oya = player.jikaze = Tile.Ton in
-    match Scoring.score_hand tiles ctx is_oya with
+    let furo_count = List.length player.furo_list in
+    let furo_mentsu = player.furo_list in
+    match Scoring.score_hand ~furo_count ~furo_mentsu tiles ctx is_oya with
     | None -> Error "役がありません"
     | Some result ->
       let loser = match game.last_discard_player with Some p -> p | None -> 0 in
@@ -232,7 +234,9 @@ let tsumo_agari (game : round) : (round, string) result =
     jikaze = player.jikaze;
   } in
   let is_oya = player.jikaze = Tile.Ton in
-  match Scoring.score_hand player.hand.tiles ctx is_oya with
+  let furo_count = List.length player.furo_list in
+  let furo_mentsu = player.furo_list in
+  match Scoring.score_hand ~furo_count ~furo_mentsu player.hand.tiles ctx is_oya with
   | None -> Error "役がありません"
   | Some result ->
     let players = Array.copy game.players in

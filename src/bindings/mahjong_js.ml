@@ -204,7 +204,9 @@ let check_tsumo () : string =
       bakaze = game.bakaze; jikaze = player.jikaze;
     } in
     let is_oya = player.jikaze = Tile.Ton in
-    match Scoring.score_hand player.hand.tiles ctx is_oya with
+    let furo_count = List.length player.furo_list in
+    let furo_mentsu = player.furo_list in
+    match Scoring.score_hand ~furo_count ~furo_mentsu player.hand.tiles ctx is_oya with
     | Some result ->
       let dora_tiles = json_arr (List.map tile_to_json (List.map Wall.dora_of_indicator (Wall.dora_indicators game.wall game.kan_count))) in
       let uradora_tiles = if player.is_riichi then
@@ -263,7 +265,7 @@ let can_ron seat : bool =
           dora_count = 0; bakaze = game.bakaze; jikaze = player.jikaze;
         } in
         let is_oya = player.jikaze = Tile.Ton in
-        match Scoring.score_hand tiles ctx is_oya with
+        match Scoring.score_hand ~furo_count:(List.length player.furo_list) ~furo_mentsu:player.furo_list tiles ctx is_oya with
         | Some _ -> true
         | None -> false
 
@@ -285,7 +287,7 @@ let check_ron seat : string =
         bakaze = game.bakaze; jikaze = player.jikaze;
       } in
       let is_oya = player.jikaze = Tile.Ton in
-      (match Scoring.score_hand tiles ctx is_oya with
+      (match Scoring.score_hand ~furo_count:(List.length player.furo_list) ~furo_mentsu:player.furo_list tiles ctx is_oya with
        | Some result ->
          let dora_tiles = json_arr (List.map tile_to_json (List.map Wall.dora_of_indicator (Wall.dora_indicators game.wall game.kan_count))) in
          let uradora_tiles = if player.is_riichi then
