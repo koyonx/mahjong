@@ -407,7 +407,7 @@ function continueAfterCalls(room: Room): void {
   const phase = getPhase(room.id);
   if (phase === 'round_end') {
     broadcastToRoom(room, () => JSON.stringify({ type: 'round_end', reason: '流局' }));
-    setTimeout(() => advanceToNextRound(room), 2000);
+    setTimeout(() => advanceToNextRound(room, false), 2000);
     return;
   }
 
@@ -490,8 +490,8 @@ function processAiTurns(room: Room): void {
 }
 
 /** 次の局に進む、または東風戦終了チェック */
-function advanceToNextRound(room: Room): void {
-  nextRound(room.id, false);
+function advanceToNextRound(room: Room, wasAgari = true): void {
+  nextRound(room.id, false, wasAgari);
   const newPhase = getPhase(room.id);
 
   // 東風戦: 南場に入ったら終了

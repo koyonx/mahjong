@@ -411,11 +411,11 @@ let riichi_discard_candidates seat : string =
       ) tiles;
       json_arr (List.rev !candidates)
 
-let next_round oya_won : string =
+let next_round oya_won was_agari : string =
   match !game_ref with
   | None -> json_null
   | Some game ->
-    let new_game = Game.next_round game oya_won in
+    let new_game = Game.next_round ~was_agari game oya_won in
     game_ref := Some new_game;
     game_state_to_json new_game
 

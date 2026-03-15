@@ -139,7 +139,8 @@ export function GameBoard({ onBack }: GameBoardProps) {
     const s = currentState ?? state;
     if (!s) return;
     const before = s.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
-    const next = nextRound(oyaWon);
+    const wasAgari = reason === '和了';
+    const next = nextRound(oyaWon, wasAgari);
     if (!next) return;
     const after = next.players.map(p => ({ jikaze: p.jikaze, score: p.score }));
 

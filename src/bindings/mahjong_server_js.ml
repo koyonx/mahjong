@@ -441,10 +441,10 @@ let do_chi room_id seat t1_kind t1_suit t1_num t2_kind t2_suit t2_num : string =
         json_obj [("ok", json_bool true)]
       | Error _ -> json_null
 
-let next_round room_id oya_won : string =
+let next_round room_id oya_won was_agari : string =
   match Hashtbl.find_opt rooms room_id with
   | None -> json_null
   | Some game ->
-    let new_game = Game.next_round game oya_won in
+    let new_game = Game.next_round ~was_agari game oya_won in
     Hashtbl.replace rooms room_id new_game;
     json_obj [("ok", json_bool true)]
