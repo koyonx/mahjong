@@ -238,7 +238,7 @@ let check_tsumo () : string =
            ("dora_count", json_int dora_n);
            ("uradora_count", json_int uradora_n);
            ("aka_count", json_int aka_n);
-           ("winner_hand", hand_json);
+           ("winner_hand", hand_json); ("winner_furo", json_arr (List.map (fun f -> match f with | Player.Chi (t1, t2, t3) -> json_obj [("type", json_str "chi"); ("tiles", json_arr [tile_to_json t1; tile_to_json t2; tile_to_json t3])] | Player.Pon t -> json_obj [("type", json_str "pon"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t])] | Player.Minkan t | Player.Ankan t -> json_obj [("type", json_str "kan"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t; tile_to_json t])]) player.furo_list));
            ("agari_tile", json_null);
            ("is_tsumo", json_bool true)
          ]
@@ -319,7 +319,7 @@ let check_ron seat : string =
               ("dora_count", json_int dora_n);
               ("uradora_count", json_int uradora_n);
               ("aka_count", json_int aka_n);
-              ("winner_hand", hand_json);
+              ("winner_hand", hand_json); ("winner_furo", json_arr (List.map (fun f -> match f with | Player.Chi (t1, t2, t3) -> json_obj [("type", json_str "chi"); ("tiles", json_arr [tile_to_json t1; tile_to_json t2; tile_to_json t3])] | Player.Pon t -> json_obj [("type", json_str "pon"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t])] | Player.Minkan t | Player.Ankan t -> json_obj [("type", json_str "kan"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t; tile_to_json t])]) player.furo_list));
               ("agari_tile", tile_to_json tile);
               ("is_tsumo", json_bool false)
             ]

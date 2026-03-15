@@ -89,6 +89,7 @@ export interface AgariResult {
   uradora_count: number;
   aka_count: number;
   winner_hand: Tile[];
+  winner_furo: Furo[];
   agari_tile: Tile | null;
   is_tsumo: boolean;
 }

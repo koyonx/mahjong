@@ -120,6 +120,16 @@ let is_kazehai = function
   | Tile.Jihai (Tile.Ton | Tile.Nan | Tile.Sha | Tile.Pei) -> true
   | _ -> false
 
+(** 刻子または槓子か判定（牌を返す） *)
+let koutsu_or_kantsu_tile = function
+  | Mentsu.Koutsu t | Mentsu.Kantsu t -> Some t
+  | _ -> None
+
+(** 刻子または槓子か（bool） *)
+let is_koutsu_or_kantsu = function
+  | Mentsu.Koutsu _ | Mentsu.Kantsu _ -> true
+  | _ -> false
+
 (** 面子から全ての牌を取得 *)
 let tiles_of_mentsu = function
   | Mentsu.Shuntsu (t1, t2, t3) -> [t1; t2; t3]
@@ -215,20 +225,20 @@ let check_pinfu (pattern : Mentsu.agari_pattern) (ctx : agari_context) : bool =
 (** 対々和判定: 全て刻子 *)
 let check_toitoi (pattern : Mentsu.agari_pattern) : bool =
   List.for_all (fun m ->
-    match m with Mentsu.Koutsu _ -> true | _ -> false
+    is_koutsu_or_kantsu m
   ) pattern.mentsu_list
 
 (** 三暗刻判定: 刻子が3つ以上 *)
 let check_sanankou (pattern : Mentsu.agari_pattern) : bool =
   let koutsu_count = List.length (List.filter (fun m ->
-    match m with Mentsu.Koutsu _ -> true | _ -> false
+    is_koutsu_or_kantsu m
   ) pattern.mentsu_list) in
   koutsu_count >= 3
 
 (** 四暗刻判定: 刻子が4つ *)
 let check_suuankou (pattern : Mentsu.agari_pattern) : bool =
   List.for_all (fun m ->
-    match m with Mentsu.Koutsu _ -> true | _ -> false
+    is_koutsu_or_kantsu m
   ) pattern.mentsu_list
 
 (** 一盃口判定: 同じ順子が2組 *)
@@ -262,15 +272,14 @@ let check_ryanpeiko (pattern : Mentsu.agari_pattern) : bool =
 let check_yakuhai (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku list =
   let yakus = ref [] in
   List.iter (fun m ->
-    match m with
-    | Mentsu.Koutsu (Tile.Jihai j) ->
+    match koutsu_or_kantsu_tile m with
+    | Some (Tile.Jihai j) ->
       if j = Tile.Haku || j = Tile.Hatsu || j = Tile.Chun then
         yakus := Yakuhai j :: !yakus;
       if j = ctx.bakaze then
         yakus := Yakuhai j :: !yakus;
       if j = ctx.jikaze && ctx.jikaze <> ctx.bakaze then
         yakus := Yakuhai j :: !yakus;
-      (* 連風牌の場合は上でbakazeとして1つ付いているので、jikazeとしてもう1つ付ける *)
       if j = ctx.jikaze && ctx.jikaze = ctx.bakaze then
         yakus := Yakuhai j :: !yakus
     | _ -> ()
@@ -323,7 +332,7 @@ let check_tsuuiisou (pattern : Mentsu.agari_pattern) : bool =
 (** 小三元判定: 三元牌の刻子2つ + 三元牌の雀頭 *)
 let check_shousangen (pattern : Mentsu.agari_pattern) : bool =
   let sangen_koutsu = List.length (List.filter (fun m ->
-    match m with Mentsu.Koutsu t -> is_sangenpai t | _ -> false
+    match koutsu_or_kantsu_tile m with Some t -> is_sangenpai t | None -> false
   ) pattern.mentsu_list) in
   let jantai_is_sangen = match pattern.jantai with
     | Tile.Jihai (Tile.Haku | Tile.Hatsu | Tile.Chun) -> true
@@ -334,14 +343,14 @@ let check_shousangen (pattern : Mentsu.agari_pattern) : bool =
 (** 大三元判定: 三元牌の刻子3つ *)
 let check_daisangen (pattern : Mentsu.agari_pattern) : bool =
   let sangen_koutsu = List.length (List.filter (fun m ->
-    match m with Mentsu.Koutsu t -> is_sangenpai t | _ -> false
+    match koutsu_or_kantsu_tile m with Some t -> is_sangenpai t | None -> false
   ) pattern.mentsu_list) in
   sangen_koutsu = 3
 
 (** 小四喜判定: 風牌の刻子3つ + 風牌の雀頭 *)
 let check_shousuushii (pattern : Mentsu.agari_pattern) : bool =
   let kaze_koutsu = List.length (List.filter (fun m ->
-    match m with Mentsu.Koutsu t -> is_kazehai t | _ -> false
+    match koutsu_or_kantsu_tile m with Some t -> is_kazehai t | None -> false
   ) pattern.mentsu_list) in
   let jantai_is_kaze = is_kazehai pattern.jantai in
   kaze_koutsu = 3 && jantai_is_kaze
@@ -349,7 +358,7 @@ let check_shousuushii (pattern : Mentsu.agari_pattern) : bool =
 (** 大四喜判定: 風牌の刻子4つ *)
 let check_daisuushii (pattern : Mentsu.agari_pattern) : bool =
   let kaze_koutsu = List.length (List.filter (fun m ->
-    match m with Mentsu.Koutsu t -> is_kazehai t | _ -> false
+    match koutsu_or_kantsu_tile m with Some t -> is_kazehai t | None -> false
   ) pattern.mentsu_list) in
   kaze_koutsu = 4
 
@@ -384,8 +393,8 @@ let check_sanshoku_doujun (pattern : Mentsu.agari_pattern) : bool =
 (** 三色同刻判定: 3種の数牌で同じ数字の刻子 *)
 let check_sanshoku_doukou (pattern : Mentsu.agari_pattern) : bool =
   let koutsus = List.filter_map (fun m ->
-    match m with
-    | Mentsu.Koutsu (Tile.Suhai (s, n)) -> Some (s, n)
+    match koutsu_or_kantsu_tile m with
+    | Some (Tile.Suhai (s, n)) -> Some (s, n)
     | _ -> None
   ) pattern.mentsu_list in
   let numbers = [1; 2; 3; 4; 5; 6; 7; 8; 9] in
