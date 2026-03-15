@@ -238,7 +238,7 @@ let check_tsumo () : string =
            ("dora_count", json_int dora_n);
            ("uradora_count", json_int uradora_n);
            ("aka_count", json_int aka_n);
-           ("winner_hand", hand_json);
+           ("winner_hand", hand_json); ("winner_furo", json_arr (List.map (fun f -> match f with | Player.Chi (t1, t2, t3) -> json_obj [("type", json_str "chi"); ("tiles", json_arr [tile_to_json t1; tile_to_json t2; tile_to_json t3])] | Player.Pon t -> json_obj [("type", json_str "pon"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t])] | Player.Minkan t | Player.Ankan t -> json_obj [("type", json_str "kan"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t; tile_to_json t])]) player.furo_list));
            ("agari_tile", json_null);
            ("is_tsumo", json_bool true)
          ]
@@ -319,7 +319,7 @@ let check_ron seat : string =
               ("dora_count", json_int dora_n);
               ("uradora_count", json_int uradora_n);
               ("aka_count", json_int aka_n);
-              ("winner_hand", hand_json);
+              ("winner_hand", hand_json); ("winner_furo", json_arr (List.map (fun f -> match f with | Player.Chi (t1, t2, t3) -> json_obj [("type", json_str "chi"); ("tiles", json_arr [tile_to_json t1; tile_to_json t2; tile_to_json t3])] | Player.Pon t -> json_obj [("type", json_str "pon"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t])] | Player.Minkan t | Player.Ankan t -> json_obj [("type", json_str "kan"); ("tiles", json_arr [tile_to_json t; tile_to_json t; tile_to_json t; tile_to_json t])]) player.furo_list));
               ("agari_tile", tile_to_json tile);
               ("is_tsumo", json_bool false)
             ]
@@ -388,11 +388,34 @@ let can_declare_riichi seat : bool =
         ) tiles;
         !found
 
-let next_round oya_won : string =
+(** リーチ宣言時に捨てられる牌のリスト（捨ててもテンパイを維持できる牌） *)
+let riichi_discard_candidates seat : string =
+  match !game_ref with
+  | None -> json_arr []
+  | Some game ->
+    let player = game.players.(seat) in
+    let tiles = player.hand.tiles in
+    if List.length tiles <> 14 then json_arr []
+    else
+      let tried = ref [] in
+      let candidates = ref [] in
+      List.iter (fun t ->
+        if not (List.exists (fun s -> Tile.compare s t = 0) !tried) then begin
+          tried := t :: !tried;
+          match Mentsu.remove_one t tiles with
+          | Some rest ->
+            if Hand.tenpai_tiles (Hand.make rest) <> [] then
+              candidates := tile_to_json t :: !candidates
+          | None -> ()
+        end
+      ) tiles;
+      json_arr (List.rev !candidates)
+
+let next_round oya_won was_agari : string =
   match !game_ref with
   | None -> json_null
   | Some game ->
-    let new_game = Game.next_round game oya_won in
+    let new_game = Game.next_round ~was_agari game oya_won in
     game_ref := Some new_game;
     game_state_to_json new_game
 

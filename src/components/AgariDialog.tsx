@@ -1,3 +1,4 @@
+import React from 'react';
 import type { AgariResult } from '../mahjong-bridge';
 import { yakuName } from '../mahjong-bridge';
 import { TileView } from './TileView';
@@ -29,9 +30,10 @@ export function AgariDialog({ result, winnerName, onClose }: AgariDialogProps) {
         </h2>
         <p className="text-center text-lg mb-4">{winnerName}</p>
 
-        {/* 和了手牌（1列に収める） */}
+        {/* 和了手牌（副露含む） */}
         {result.winner_hand && result.winner_hand.length > 0 && (() => {
-          const totalTiles = result.winner_hand.length + (result.agari_tile ? 1 : 0);
+          const furoTiles = (result.winner_furo ?? []).reduce((n, f) => n + f.tiles.length, 0);
+          const totalTiles = result.winner_hand.length + (result.agari_tile ? 1 : 0) + furoTiles;
           const scale = totalTiles > 12 ? 0.7 : totalTiles > 9 ? 0.8 : 0.9;
           return (
           <div className="mb-5" style={{
@@ -57,6 +59,15 @@ export function AgariDialog({ result, winnerName, onClose }: AgariDialogProps) {
                 </div>
               </>
             )}
+            {/* 副露 */}
+            {result.winner_furo && result.winner_furo.length > 0 && result.winner_furo.map((f, fi) => (
+              <React.Fragment key={fi}>
+                <div style={{ width: 4, flexShrink: 0, borderLeft: '2px solid rgba(255,255,255,0.2)', height: 30, alignSelf: 'center' }} />
+                {f.tiles.map((t, ti) => (
+                  <TileView key={`${fi}-${ti}`} tile={t} small />
+                ))}
+              </React.Fragment>
+            ))}
           </div>
           );
         })()}

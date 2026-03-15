@@ -271,10 +271,24 @@ let declare_riichi (game : round) : (round, string) result =
     Ok { game with players; riichi_sticks = game.riichi_sticks + 1 }
   | Error e -> Error e
 
-(** テンパイ判定 *)
+(** テンパイ判定（副露考慮） *)
 let is_tenpai (player : Player.t) : bool =
-  List.length player.hand.tiles = 13 &&
-  Hand.tenpai_tiles player.hand <> []
+  let furo_count = List.length player.furo_list in
+  let expected = 13 - furo_count * 3 in
+  let n = List.length player.hand.tiles in
+  if n <> expected then false
+  else
+    (* 全候補牌を加えてみて和了になるものがあるか *)
+    let suits = [Tile.Manzu; Tile.Pinzu; Tile.Souzu] in
+    let numbers = [1; 2; 3; 4; 5; 6; 7; 8; 9] in
+    let jihais = [Tile.Ton; Tile.Nan; Tile.Sha; Tile.Pei; Tile.Haku; Tile.Hatsu; Tile.Chun] in
+    let candidates =
+      List.concat_map (fun s -> List.map (fun n -> Tile.Suhai (s, n)) numbers) suits @
+      List.map (fun j -> Tile.Jihai j) jihais
+    in
+    List.exists (fun t ->
+      Mentsu.find_agari_patterns_furo (List.sort Tile.compare (t :: player.hand.tiles)) furo_count <> []
+    ) candidates
 
 (** 流局時のテンパイ/ノーテン精算 *)
 let ryuukyoku_payments (game : round) : round =
@@ -296,10 +310,12 @@ let ryuukyoku_payments (game : round) : round =
   { game with players }
 
 (** 次の局に進む *)
-let next_round (game : round) (oya_won : bool) : round =
-  (* 流局時はテンパイ精算を実行 *)
+(* oya_won: 親が和了したか。子の和了ならfalseだが流局もfalse。
+   区別のために was_agari パラメータで和了があったかを示す *)
+let next_round ?(was_agari=false) (game : round) (oya_won : bool) : round =
+  (* 流局時（和了なし）のみテンパイ精算 *)
   let game =
-    if game.phase = RoundEnd && not oya_won then
+    if not was_agari && not oya_won && game.phase = RoundEnd then
       ryuukyoku_payments game
     else game
   in

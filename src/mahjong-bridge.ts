@@ -89,6 +89,7 @@ export interface AgariResult {
   uradora_count: number;
   aka_count: number;
   winner_hand: Tile[];
+  winner_furo: Furo[];
   agari_tile: Tile | null;
   is_tsumo: boolean;
 }
@@ -158,8 +159,12 @@ export function canDeclareRiichi(seat: number): boolean {
   return mahjongJs.can_declare_riichi(seat);
 }
 
-export function nextRound(oyaWon: boolean): GameState | null {
-  return parse<GameState>(mahjongJs.next_round(oyaWon));
+export function riichiDiscardCandidates(seat: number): Tile[] {
+  try { return JSON.parse(mahjongJs.riichi_discard_candidates(seat)) as Tile[]; } catch { return []; }
+}
+
+export function nextRound(oyaWon: boolean, wasAgari: boolean = false): GameState | null {
+  return parse<GameState>(mahjongJs.next_round(oyaWon, wasAgari));
 }
 
 // === ポン・チー ===

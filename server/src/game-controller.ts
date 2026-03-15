@@ -138,7 +138,7 @@ export function doChi(roomId: string, seat: number, t1: Tile, t2: Tile): boolean
   return result?.ok ?? false;
 }
 
-export function nextRound(roomId: string, oyaWon: boolean): boolean {
-  const result = parse<{ ok: boolean }>(mahjong.next_round(roomId, oyaWon));
+export function nextRound(roomId: string, oyaWon: boolean, wasAgari: boolean = false): boolean {
+  const result = parse<{ ok: boolean }>(mahjong.next_round(roomId, oyaWon, wasAgari));
   return result?.ok ?? false;
 }
