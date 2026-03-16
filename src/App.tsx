@@ -3,9 +3,10 @@ import { initMahjong } from './mahjong-bridge';
 import { GameBoard } from './components/GameBoard';
 import { Lobby } from './components/Lobby';
 import { MultiplayerGameBoard } from './components/MultiplayerGameBoard';
+import { HelpPage } from './components/HelpPage';
 import { useMultiplayer } from './hooks/useMultiplayer';
 
-type Mode = 'menu' | 'single' | 'multi';
+type Mode = 'menu' | 'single' | 'multi' | 'help';
 
 function SinglePlayerApp({ onBack }: { onBack: () => void }) {
   const [ready, setReady] = useState(false);
@@ -89,6 +90,7 @@ function App() {
 
   if (mode === 'single') return <SinglePlayerApp onBack={() => setMode('menu')} />;
   if (mode === 'multi') return <MultiplayerApp onBack={() => setMode('menu')} />;
+  if (mode === 'help') return <HelpPage onBack={() => setMode('menu')} />;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-8">
@@ -107,6 +109,12 @@ function App() {
           className="px-8 py-4 bg-green-700 hover:bg-green-600 text-white text-lg font-bold rounded-xl transition shadow-lg"
         >
           オンライン対戦
+        </button>
+        <button
+          onClick={() => setMode('help')}
+          className="px-8 py-4 bg-gray-700 hover:bg-gray-600 text-white text-lg font-bold rounded-xl transition shadow-lg"
+        >
+          ヘルプ（ルール・役一覧）
         </button>
       </div>
     </div>
