@@ -228,18 +228,23 @@ let check_toitoi (pattern : Mentsu.agari_pattern) : bool =
     is_koutsu_or_kantsu m
   ) pattern.mentsu_list
 
-(** 三暗刻判定: 刻子が3つ以上 *)
-let check_sanankou (pattern : Mentsu.agari_pattern) : bool =
-  let koutsu_count = List.length (List.filter (fun m ->
+(** 三暗刻判定: 暗刻（手牌からの刻子）が3つ以上 *)
+(* furo_count: 副露の面子数。pattern.mentsu_listの後ろfuro_count個が副露 *)
+let check_sanankou ?(furo_count=0) (pattern : Mentsu.agari_pattern) : bool =
+  let total = List.length pattern.mentsu_list in
+  let hand_mentsu = List.filteri (fun i _ -> i < total - furo_count) pattern.mentsu_list in
+  let ankou_count = List.length (List.filter (fun m ->
     is_koutsu_or_kantsu m
-  ) pattern.mentsu_list) in
-  koutsu_count >= 3
+  ) hand_mentsu) in
+  ankou_count >= 3
 
-(** 四暗刻判定: 刻子が4つ *)
-let check_suuankou (pattern : Mentsu.agari_pattern) : bool =
-  List.for_all (fun m ->
-    is_koutsu_or_kantsu m
-  ) pattern.mentsu_list
+(** 四暗刻判定: 暗刻が4つ（全て手牌から） *)
+let check_suuankou ?(furo_count=0) (pattern : Mentsu.agari_pattern) : bool =
+  if furo_count > 0 then false  (* 副露ありなら四暗刻不可 *)
+  else
+    List.for_all (fun m ->
+      is_koutsu_or_kantsu m
+    ) pattern.mentsu_list
 
 (** 一盃口判定: 同じ順子が2組 *)
 let check_iipeiko (pattern : Mentsu.agari_pattern) : bool =
@@ -274,13 +279,14 @@ let check_yakuhai (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku 
   List.iter (fun m ->
     match koutsu_or_kantsu_tile m with
     | Some (Tile.Jihai j) ->
+      (* 三元牌: 各1翻 *)
       if j = Tile.Haku || j = Tile.Hatsu || j = Tile.Chun then
         yakus := Yakuhai j :: !yakus;
+      (* 場風牌: 1翻 *)
       if j = ctx.bakaze then
         yakus := Yakuhai j :: !yakus;
-      if j = ctx.jikaze && ctx.jikaze <> ctx.bakaze then
-        yakus := Yakuhai j :: !yakus;
-      if j = ctx.jikaze && ctx.jikaze = ctx.bakaze then
+      (* 自風牌: 1翻（場風と同じでも別途カウント = 連風牌で2翻） *)
+      if j = ctx.jikaze then
         yakus := Yakuhai j :: !yakus
     | _ -> ()
   ) pattern.mentsu_list;
@@ -428,6 +434,43 @@ let check_junchan (pattern : Mentsu.agari_pattern) : bool =
   in
   List.for_all mentsu_has_routou pattern.mentsu_list && jantai_routou && no_jihai
 
+(** 緑一色判定: 2s,3s,4s,6s,8sと發のみ *)
+let check_ryuuiisou (pattern : Mentsu.agari_pattern) : bool =
+  let is_green = function
+    | Tile.Suhai (Tile.Souzu, n) -> n = 2 || n = 3 || n = 4 || n = 6 || n = 8
+    | Tile.Jihai Tile.Hatsu -> true
+    | _ -> false
+  in
+  let all_tiles =
+    List.concat_map tiles_of_mentsu pattern.mentsu_list @ [pattern.jantai; pattern.jantai]
+  in
+  List.for_all is_green all_tiles
+
+(** 九蓮宝燈判定: 同一スートで1112345678999+任意1枚 *)
+let check_chuuren (tiles : Tile.tile list) : bool =
+  if List.length tiles <> 14 then false
+  else
+    let suits = [Tile.Manzu; Tile.Pinzu; Tile.Souzu] in
+    List.exists (fun suit ->
+      let same_suit = List.filter (fun t ->
+        match t with Tile.Suhai (s, _) -> s = suit | _ -> false
+      ) tiles in
+      if List.length same_suit <> 14 then false
+      else
+        let counts = Array.make 10 0 in
+        List.iter (fun t ->
+          match t with Tile.Suhai (_, n) -> counts.(n) <- counts.(n) + 1 | _ -> ()
+        ) same_suit;
+        let base = [|0; 3; 1; 1; 1; 1; 1; 1; 1; 3|] in
+        let extra = ref 0 in
+        let valid = ref true in
+        for n = 1 to 9 do
+          if counts.(n) < base.(n) then valid := false
+          else extra := !extra + (counts.(n) - base.(n))
+        done;
+        !valid && !extra = 1
+    ) suits
+
 (** 食い下がりの翻数（鳴き時に1翻下がる役） *)
 let han_of_yaku_open = function
   | Chanta -> 1
@@ -439,17 +482,19 @@ let han_of_yaku_open = function
   | y -> han_of_yaku y  (* 変化なし *)
 
 (** 和了パターンから成立する役を全て判定する *)
-let judge_yaku (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku list =
+let judge_yaku ?(furo_count=0) (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku list =
   let yakus = ref [] in
   let add y = yakus := y :: !yakus in
 
   (* 役満チェック *)
-  if check_suuankou pattern && ctx.is_tsumo then add Suuankou;
+  (* 四暗刻: ツモなら常にOK、ロンは単騎待ちの場合のみ（furo_count=0前提） *)
+  if check_suuankou ~furo_count pattern then add Suuankou;
   if check_daisangen pattern then add Daisangen;
   if check_shousuushii pattern then add Shousuushii;
   if check_daisuushii pattern then add Daisuushii;
   if check_tsuuiisou pattern then add Tsuuiisou;
   if check_chinroutou pattern then add Chinroutou;
+  if check_ryuuiisou pattern then add Ryuuiisou;
 
   (* 役満があれば他の役は不要 *)
   if !yakus <> [] then !yakus
@@ -468,7 +513,7 @@ let judge_yaku (pattern : Mentsu.agari_pattern) (ctx : agari_context) : yaku lis
     if check_tanyao pattern then add Tanyao;
     if ctx.is_menzen && check_pinfu pattern ctx then add Pinfu;
     if check_toitoi pattern then add Toitoi;
-    if check_sanankou pattern then add Sanankou;
+    if check_sanankou ~furo_count pattern then add Sanankou;
     if check_honroutou pattern then add Honroutou;
     if check_shousangen pattern then add Shousangen;
     if check_honitsu pattern then add Honitsu;
@@ -514,6 +559,7 @@ let judge ?(furo_count=0) ?(furo_mentsu=[]) (tiles : Tile.tile list) (ctx : agar
   let special_yakus = ref [] in
   if furo_count = 0 then begin
     if check_kokushi tiles then special_yakus := [Kokushi];
+    if check_chuuren tiles then special_yakus := [Chuuren];
     if check_chiitoitsu tiles then special_yakus := [Chiitoitsu]
   end;
 
@@ -524,7 +570,7 @@ let judge ?(furo_count=0) ?(furo_mentsu=[]) (tiles : Tile.tile list) (ctx : agar
     { p with Mentsu.mentsu_list = p.mentsu_list @ extra_mentsu }
   ) patterns in
   let normal_results = List.map (fun p ->
-    let yakus = judge_yaku p ctx in
+    let yakus = judge_yaku ~furo_count p ctx in
     let han = calc_han yakus ctx.is_menzen in
     (* ダブルリーチ: +1翻追加 *)
     let han = if ctx.is_double_riichi then han + 1 else han in

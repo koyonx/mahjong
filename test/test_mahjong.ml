@@ -108,10 +108,11 @@ let test_tanyao _ =
   | None -> assert_failure "should have yaku"
 
 let test_toitoi _ =
-  (* 1m1m1m 5p5p5p 9s9s9s 東東東 白白 *)
-  let tiles = [m 1; m 1; m 1; p 5; p 5; p 5; s 9; s 9; s 9;
-               ton; ton; ton; haku; haku] in
-  match Yaku.judge tiles default_ctx with
+  (* 門前の全刻子はロンで四暗刻になるので、副露ありのテストに変更 *)
+  (* 1m1m1m(手) 5p5p5p(手) 9s9s9s(副露pon) 東東東(副露pon) 白白 *)
+  let tiles = [m 1; m 1; m 1; p 5; p 5; p 5; haku; haku] in
+  let furo_mentsu = [Player.Pon (s 9); Player.Pon ton] in
+  match Yaku.judge ~furo_count:2 ~furo_mentsu tiles default_ctx with
   | Some (yakus, _) ->
     assert_bool "toitoi" (List.exists (fun y -> y = Yaku.Toitoi) yakus)
   | None -> assert_failure "should have yaku"

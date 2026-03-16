@@ -45,7 +45,8 @@ let calculate_fu (pattern : Mentsu.agari_pattern) (ctx : Yaku.agari_context) : i
 
 (** 基本点の計算 *)
 let base_points (han : int) (fu : int) : int =
-  if han >= 13 then 8000          (* 役満 *)
+  if han >= 26 then 16000         (* ダブル役満 *)
+  else if han >= 13 then 8000     (* 役満 *)
   else if han >= 11 then 6000     (* 三倍満 *)
   else if han >= 8 then 4000      (* 倍満 *)
   else if han >= 6 then 3000      (* 跳満 *)
