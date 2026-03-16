@@ -254,7 +254,7 @@ let check_tsumo room_id : string =
     let ctx = {
       Yaku.is_tsumo = true; is_riichi = player.is_riichi; is_double_riichi = player.is_double_riichi;
       is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = 0;
-      bakaze = game.bakaze; jikaze = player.jikaze;
+      agari_tile = None; bakaze = game.bakaze; jikaze = player.jikaze;
     } in
     let is_oya = player.jikaze = Tile.Ton in
     match Scoring.score_hand ~furo_count:(List.length player.furo_list) ~furo_mentsu:player.furo_list player.hand.tiles ctx is_oya with
@@ -286,7 +286,7 @@ let check_ron room_id seat : string =
       let ctx = {
         Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = player.is_double_riichi;
         is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = 0;
-        bakaze = game.bakaze; jikaze = player.jikaze;
+        agari_tile = None; bakaze = game.bakaze; jikaze = player.jikaze;
       } in
       let is_oya = player.jikaze = Tile.Ton in
       (match Scoring.score_hand ~furo_count:(List.length player.furo_list) ~furo_mentsu:player.furo_list tiles ctx is_oya with
