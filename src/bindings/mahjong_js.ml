@@ -412,6 +412,33 @@ let riichi_discard_candidates seat : string =
       ) tiles;
       json_arr (List.rev !candidates)
 
+(** リーチ宣言時の各捨て牌候補に対する待ち牌リストを返す *)
+let riichi_discard_with_waits seat : string =
+  match !game_ref with
+  | None -> json_arr []
+  | Some game ->
+    let player = game.players.(seat) in
+    let tiles = player.hand.tiles in
+    if List.length tiles <> 14 then json_arr []
+    else
+      let tried = ref [] in
+      let results = ref [] in
+      List.iter (fun t ->
+        if not (List.exists (fun s -> Tile.compare s t = 0) !tried) then begin
+          tried := t :: !tried;
+          match Mentsu.remove_one t tiles with
+          | Some rest ->
+            let waits = Hand.tenpai_tiles (Hand.make rest) in
+            if waits <> [] then
+              results := json_obj [
+                ("discard", tile_to_json t);
+                ("waits", json_arr (List.map tile_to_json waits))
+              ] :: !results
+          | None -> ()
+        end
+      ) tiles;
+      json_arr (List.rev !results)
+
 let next_round oya_won was_agari : string =
   match !game_ref with
   | None -> json_null

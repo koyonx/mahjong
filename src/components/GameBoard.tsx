@@ -6,8 +6,9 @@ import {
   declareRiichi, aiDecide, kazeToJa,
   canPon, doPon, canChi, doChi,
   canMinkan, doMinkan, canAnkan, doAnkan, canKakan, doKakan,
-  canDeclareRiichi, riichiDiscardCandidates,
+  canDeclareRiichi, riichiDiscardCandidates, riichiDiscardWithWaits,
   canKyuushu, declareKyuushu,
+  type RiichiDiscardOption,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
@@ -56,11 +57,14 @@ export function GameBoard({ onBack }: GameBoardProps) {
   }, []);
 
   const [riichiCandidates, setRiichiCandidates] = useState<Tile[]>([]);
+  const [riichiOptions, setRiichiOptions] = useState<RiichiDiscardOption[]>([]);
 
   const handleRiichi = useCallback(() => {
     const candidates = riichiDiscardCandidates(HUMAN_SEAT);
+    const options = riichiDiscardWithWaits(HUMAN_SEAT);
     setRiichiMode(true);
     setRiichiCandidates(candidates);
+    setRiichiOptions(options);
     setMessage('リーチ！ 捨てる牌を選んでください');
   }, []);
 
@@ -81,6 +85,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
       if (riichiState) setState(riichiState);
       setRiichiMode(false);
       setRiichiCandidates([]);
+      setRiichiOptions([]);
     }
 
     const newState = discardTile(tile);
@@ -479,12 +484,48 @@ export function GameBoard({ onBack }: GameBoardProps) {
             disabledTiles={riichiMode ? riichiCandidates : undefined}
           />
         </div>
-        {tenpaiTiles.length > 0 && (
+        {/* リーチモード: 各候補の待ち牌を表示 */}
+        {riichiMode && riichiOptions.length > 0 ? (
+          <div style={{ marginTop: 6 }}>
+            {/* 選択中の牌の待ちをハイライト、未選択時は全候補表示 */}
+            {(() => {
+              const allHand = state.players[HUMAN_SEAT].hand ?? [];
+              const tsumo = state.players[HUMAN_SEAT].tsumo;
+              // 選択された牌を特定
+              let selectedDiscard: Tile | null = null;
+              if (selectedTile !== null) {
+                if (selectedTile < allHand.length) {
+                  selectedDiscard = allHand[selectedTile];
+                } else if (tsumo) {
+                  selectedDiscard = tsumo;
+                }
+              }
+              const filtered = selectedDiscard
+                ? riichiOptions.filter(o =>
+                    o.discard.kind === selectedDiscard!.kind &&
+                    o.discard.suit === selectedDiscard!.suit &&
+                    o.discard.number === selectedDiscard!.number
+                  )
+                : riichiOptions;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                  {filtered.map((opt, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <TileView tile={opt.discard} small />
+                      <span style={{ fontSize: 11, color: '#888' }}>→ 待ち:</span>
+                      {opt.waits.map((w, j) => <TileView key={j} tile={w} small />)}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        ) : tenpaiTiles.length > 0 ? (
           <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <span style={{ fontSize: 11, color: '#8a8' }}>待ち:</span>
             {tenpaiTiles.map((t, i) => <TileView key={i} tile={t} small />)}
           </div>
-        )}
+        ) : null}
         {/* アクションボタン */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
           {canTsumo && (
