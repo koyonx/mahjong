@@ -7,6 +7,7 @@ import {
   canPon, doPon, canChi, doChi,
   canMinkan, doMinkan, canAnkan, doAnkan, canKakan, doKakan,
   canDeclareRiichi, riichiDiscardCandidates,
+  canKyuushu, declareKyuushu,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
 import { Kawa } from './Kawa';
@@ -215,6 +216,8 @@ export function GameBoard({ onBack }: GameBoardProps) {
       setTenpaiTiles(getTenpaiTiles());
       const tsumoResult = checkTsumoAgari();
       if (tsumoResult) setMessage('ツモ和了できます！');
+      // 九種九牌チェック
+      if (canKyuushu(HUMAN_SEAT)) setMessage('九種九牌で流局できます');
     } else {
       setMessage(`${kazeToJa(drawnState.players[drawnState.current_turn].jikaze)}家の番...`);
       setTimeout(() => {
@@ -404,7 +407,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const isMyTurn = state.phase === 'waiting_discard' && state.current_turn === HUMAN_SEAT;
   const ankanTiles = isMyTurn ? canAnkan(HUMAN_SEAT) : [];
   const kakanTiles = isMyTurn ? canKakan(HUMAN_SEAT) : [];
-  const myPlayer = state.players[HUMAN_SEAT];
+  const showKyuushu = isMyTurn && canKyuushu(HUMAN_SEAT);
   const canRiichi = isMyTurn && canDeclareRiichi(HUMAN_SEAT);
 
   return (
@@ -490,6 +493,19 @@ export function GameBoard({ onBack }: GameBoardProps) {
               color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
               boxShadow: '0 2px 8px rgba(196,30,58,0.4)',
             }}>ツモ</button>
+          )}
+          {showKyuushu && (
+            <button onClick={() => {
+              const newState = declareKyuushu();
+              if (newState) {
+                setState(newState);
+                setMessage('九種九牌 — 流局');
+                setTimeout(() => showScoreAndAdvance('流局', false, newState), 2000);
+              }
+            }} style={{
+              padding: '8px 24px', background: '#8a6a2a', border: 'none', borderRadius: 6,
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}>九種九牌</button>
           )}
           {canRiichi && !riichiMode && (
             <button onClick={handleRiichi} style={{

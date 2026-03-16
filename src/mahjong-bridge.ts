@@ -156,6 +156,14 @@ export function getTenpaiTiles(): Tile[] {
   return JSON.parse(mahjongJs.get_tenpai()) as Tile[];
 }
 
+export function canKyuushu(seat: number): boolean {
+  return mahjongJs.can_kyuushu(seat);
+}
+
+export function declareKyuushu(): GameState | null {
+  return parse<GameState>(mahjongJs.declare_kyuushu());
+}
+
 export function canDeclareRiichi(seat: number): boolean {
   return mahjongJs.can_declare_riichi(seat);
 }

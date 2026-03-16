@@ -420,6 +420,35 @@ let next_round oya_won was_agari : string =
     game_ref := Some new_game;
     game_state_to_json new_game
 
+(** 九種九牌判定: 最初のツモ後に手牌に9種以上の么九牌がある *)
+let can_kyuushu seat : bool =
+  match !game_ref with
+  | None -> false
+  | Some game ->
+    if not game.first_turns.(seat) then false  (* 最初のターンでない *)
+    else if not game.no_calls_yet then false   (* 鳴きが入った *)
+    else
+      let player = game.players.(seat) in
+      let tiles = player.hand.tiles in
+      let yaochu_types = ref [] in
+      List.iter (fun t ->
+        let is_yao = match t with
+          | Tile.Suhai (_, n) -> n = 1 || n = 9
+          | Tile.Jihai _ -> true
+        in
+        if is_yao && not (List.exists (fun s -> Tile.compare s t = 0) !yaochu_types) then
+          yaochu_types := t :: !yaochu_types
+      ) tiles;
+      List.length !yaochu_types >= 9
+
+(** 九種九牌で流局 *)
+let declare_kyuushu () : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    game_ref := Some { game with phase = Game.RoundEnd };
+    game_state_to_json { game with phase = Game.RoundEnd }
+
 (** ポン可否判定 *)
 let can_pon seat : bool =
   match !game_ref with
