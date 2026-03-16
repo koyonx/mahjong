@@ -62,7 +62,8 @@ const yakuNames: Record<string, string> = {
   chinitsu: '清一色', kokushi: '国士無双', suuankou: '四暗刻',
   daisangen: '大三元', shousuushii: '小四喜', daisuushii: '大四喜',
   tsuuiisou: '字一色', ryuuiisou: '緑一色', chinroutou: '清老頭',
-  chuuren: '九蓮宝燈', tenhou: '天和', chiihou: '地和',
+  chuuren: '九蓮宝燈', haitei: '海底摸月', houtei: '河底撈魚',
+  tenhou: '天和', chiihou: '地和',
 };
 
 export function yakuName(id: string): string {
