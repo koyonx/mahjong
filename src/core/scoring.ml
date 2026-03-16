@@ -100,8 +100,11 @@ let score_hand ?(furo_count=0) ?(furo_mentsu=[]) (tiles : Tile.tile list) (ctx :
   | None -> None
   | Some (yakus, han) ->
     let patterns = Mentsu.find_agari_patterns_furo tiles furo_count in
+    let has_pinfu = List.exists (fun y -> y = Yaku.Pinfu) yakus in
     let fu =
       if List.exists (fun y -> y = Yaku.Chiitoitsu) yakus then 25
+      else if has_pinfu && ctx.is_tsumo then 20  (* 平和ツモ: 20符固定 *)
+      else if has_pinfu && not ctx.is_tsumo then 30  (* 平和ロン: 30符固定 *)
       else
         match patterns with
         | [] -> 30
