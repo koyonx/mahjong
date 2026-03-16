@@ -251,7 +251,7 @@ let check_tsumo room_id : string =
   | Some game ->
     let player = game.players.(game.current_turn) in
     let ctx = {
-      Yaku.is_tsumo = true; is_riichi = player.is_riichi; is_double_riichi = false;
+      Yaku.is_tsumo = true; is_riichi = player.is_riichi; is_double_riichi = player.is_double_riichi;
       is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = 0;
       bakaze = game.bakaze; jikaze = player.jikaze;
     } in
@@ -283,7 +283,7 @@ let check_ron room_id seat : string =
       let player = game.players.(seat) in
       let tiles = tile :: player.hand.tiles in
       let ctx = {
-        Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = false;
+        Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = player.is_double_riichi;
         is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = 0;
         bakaze = game.bakaze; jikaze = player.jikaze;
       } in
