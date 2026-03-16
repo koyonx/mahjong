@@ -52,7 +52,8 @@ let yaku_id_of (y : Yaku.yaku) : string =
   | Yaku.Daisangen -> "daisangen" | Yaku.Shousuushii -> "shousuushii"
   | Yaku.Daisuushii -> "daisuushii" | Yaku.Tsuuiisou -> "tsuuiisou"
   | Yaku.Ryuuiisou -> "ryuuiisou" | Yaku.Chinroutou -> "chinroutou"
-  | Yaku.Chuuren -> "chuuren" | Yaku.Tenhou -> "tenhou" | Yaku.Chiihou -> "chiihou"
+  | Yaku.Chuuren -> "chuuren" | Yaku.Haitei -> "haitei" | Yaku.Houtei -> "houtei"
+  | Yaku.Tenhou -> "tenhou" | Yaku.Chiihou -> "chiihou"
 
 let yaku_to_json (y : Yaku.yaku) : string =
   json_obj [("id", json_str (yaku_id_of y)); ("han", json_int (Yaku.han_of_yaku y))]

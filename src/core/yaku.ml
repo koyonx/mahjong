@@ -30,6 +30,8 @@ type yaku =
   | Ryuuiisou          (** 緑一色 *)
   | Chinroutou         (** 清老頭 *)
   | Chuuren            (** 九蓮宝燈 *)
+  | Haitei             (** 海底摸月 *)
+  | Houtei             (** 河底撈魚 *)
   | Tenhou             (** 天和 *)
   | Chiihou            (** 地和 *)
 
@@ -42,6 +44,8 @@ let han_of_yaku = function
   | Pinfu -> 1
   | Iipeiko -> 1
   | Yakuhai _ -> 1
+  | Haitei -> 1
+  | Houtei -> 1
   | Chanta -> 2
   | Ittsu -> 2
   | Sanshoku_doujun -> 2
@@ -97,6 +101,8 @@ let name_of_yaku = function
   | Ryuuiisou -> "緑一色"
   | Chinroutou -> "清老頭"
   | Chuuren -> "九蓮宝燈"
+  | Haitei -> "海底摸月"
+  | Houtei -> "河底撈魚"
   | Tenhou -> "天和"
   | Chiihou -> "地和"
 
@@ -506,8 +512,8 @@ let judge_yaku ?(furo_count=0) (pattern : Mentsu.agari_pattern) (ctx : agari_con
     if ctx.is_tsumo && ctx.is_menzen then add Tsumo;
     if ctx.is_tenhou then add Tenhou;
     if ctx.is_chiihou then add Chiihou;
-    if ctx.is_haitei then add Tsumo;  (* 海底ツモ: 1翻追加 *)
-    if ctx.is_houtei then add Tsumo;  (* 河底ロン: 1翻追加 *)
+    if ctx.is_haitei then add Haitei;
+    if ctx.is_houtei then add Houtei;
 
     (* 手役: 門前限定の役は鳴いていたら付かない *)
     if check_tanyao pattern then add Tanyao;
