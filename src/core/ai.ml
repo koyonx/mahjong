@@ -129,6 +129,7 @@ let decide (player : Player.t) (bakaze : Tile.jihai) : action =
     is_haitei = false;
     is_houtei = false;
     dora_count = 0;
+    agari_tile = None;
     bakaze;
     jikaze = player.jikaze;
   } in

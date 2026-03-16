@@ -203,6 +203,7 @@ let ron (game : round) (winner : int) : (round, string) result =
       is_haitei = false;
       is_houtei = is_haitei game;
       dora_count = total_dora;
+      agari_tile = Some tile;
       bakaze = game.bakaze;
       jikaze = player.jikaze;
     } in
@@ -226,17 +227,20 @@ let tsumo_agari (game : round) : (round, string) result =
   let dora_count = Wall.count_dora game.wall game.kan_count player.hand.tiles in
   let uradora_count = if player.is_riichi then Wall.count_uradora game.wall game.kan_count player.hand.tiles else 0 in
   let total_dora = dora_count + uradora_count + player.aka_count in
+  let is_first = game.first_turns.(game.current_turn) && game.no_calls_yet in
+  let is_oya_player = player.jikaze = Tile.Ton in
   let ctx = {
     Yaku.is_tsumo = true;
     is_riichi = player.is_riichi;
     is_double_riichi = player.is_double_riichi;
     is_ippatsu = player.is_ippatsu;
-    is_tenhou = false;
-    is_chiihou = false;
+    is_tenhou = is_first && is_oya_player;
+    is_chiihou = is_first && not is_oya_player;
     is_menzen = Player.is_menzen player;
     is_haitei = is_haitei game;
     is_houtei = false;
     dora_count = total_dora;
+    agari_tile = player.hand.tsumo;
     bakaze = game.bakaze;
     jikaze = player.jikaze;
   } in

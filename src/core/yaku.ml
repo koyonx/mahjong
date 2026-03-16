@@ -159,6 +159,7 @@ type agari_context = {
   is_haitei : bool;       (** 海底ツモか *)
   is_houtei : bool;       (** 河底ロンか *)
   dora_count : int;       (** ドラ枚数 *)
+  agari_tile : Tile.tile option;  (** 和了牌（ロン時の牌、ツモ時はツモ牌） *)
   bakaze : Tile.jihai;    (** 場風 *)
   jikaze : Tile.jihai;    (** 自風 *)
 }
@@ -174,6 +175,7 @@ let default_context = {
   is_haitei = false;
   is_houtei = false;
   dora_count = 0;
+  agari_tile = None;
   bakaze = Tile.Ton;
   jikaze = Tile.Ton;
 }
@@ -244,13 +246,17 @@ let check_sanankou ?(furo_count=0) (pattern : Mentsu.agari_pattern) : bool =
   ) hand_mentsu) in
   ankou_count >= 3
 
-(** 四暗刻判定: 暗刻が4つ（全て手牌から） *)
-let check_suuankou ?(furo_count=0) (pattern : Mentsu.agari_pattern) : bool =
-  if furo_count > 0 then false  (* 副露ありなら四暗刻不可 *)
+(** 四暗刻判定: 暗刻が4つ（全て手牌から）
+    ロン時は単騎待ち（雀頭待ち）の場合のみ成立 *)
+let check_suuankou ?(furo_count=0) (pattern : Mentsu.agari_pattern) (ctx : agari_context) : bool =
+  if furo_count > 0 then false
+  else if not (List.for_all is_koutsu_or_kantsu pattern.mentsu_list) then false
+  else if ctx.is_tsumo then true  (* ツモなら常にOK *)
   else
-    List.for_all (fun m ->
-      is_koutsu_or_kantsu m
-    ) pattern.mentsu_list
+    (* ロン: 和了牌が雀頭の一部（単騎待ち）の場合のみ *)
+    match ctx.agari_tile with
+    | Some t -> Tile.compare t pattern.jantai = 0
+    | None -> false
 
 (** 一盃口判定: 同じ順子が2組 *)
 let check_iipeiko (pattern : Mentsu.agari_pattern) : bool =
@@ -494,7 +500,7 @@ let judge_yaku ?(furo_count=0) (pattern : Mentsu.agari_pattern) (ctx : agari_con
 
   (* 役満チェック *)
   (* 四暗刻: ツモなら常にOK、ロンは単騎待ちの場合のみ（furo_count=0前提） *)
-  if check_suuankou ~furo_count pattern then add Suuankou;
+  if check_suuankou ~furo_count pattern ctx then add Suuankou;
   if check_daisangen pattern then add Daisangen;
   if check_shousuushii pattern then add Shousuushii;
   if check_daisuushii pattern then add Daisuushii;
