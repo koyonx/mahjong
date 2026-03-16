@@ -164,6 +164,15 @@ export function declareKyuushu(): GameState | null {
   return parse<GameState>(mahjongJs.declare_kyuushu());
 }
 
+export interface RiichiDiscardOption {
+  discard: Tile;
+  waits: Tile[];
+}
+
+export function riichiDiscardWithWaits(seat: number): RiichiDiscardOption[] {
+  try { return JSON.parse(mahjongJs.riichi_discard_with_waits(seat)) as RiichiDiscardOption[]; } catch { return []; }
+}
+
 export function canDeclareRiichi(seat: number): boolean {
   return mahjongJs.can_declare_riichi(seat);
 }
