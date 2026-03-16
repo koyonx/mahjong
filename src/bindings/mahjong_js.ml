@@ -199,7 +199,7 @@ let check_tsumo () : string =
     let uradora_n = if player.is_riichi then Wall.count_uradora game.wall game.kan_count player.hand.tiles else 0 in
     let aka_n = player.aka_count in
     let ctx = {
-      Yaku.is_tsumo = true; is_riichi = player.is_riichi; is_double_riichi = false;
+      Yaku.is_tsumo = true; is_riichi = player.is_riichi; is_double_riichi = player.is_double_riichi;
       is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = dora_n + uradora_n + aka_n;
       bakaze = game.bakaze; jikaze = player.jikaze;
     } in
@@ -259,7 +259,7 @@ let can_ron seat : bool =
       else
         let tiles = tile :: player.hand.tiles in
         let ctx = {
-          Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = false;
+          Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = player.is_double_riichi;
           is_ippatsu = false; is_tenhou = false; is_chiihou = false;
           is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false;
           dora_count = 0; bakaze = game.bakaze; jikaze = player.jikaze;
@@ -282,7 +282,7 @@ let check_ron seat : string =
       let uradora_n = if player.is_riichi then Wall.count_uradora game.wall game.kan_count tiles else 0 in
       let aka_n = player.aka_count in
       let ctx = {
-        Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = false;
+        Yaku.is_tsumo = false; is_riichi = player.is_riichi; is_double_riichi = player.is_double_riichi;
         is_ippatsu = false; is_tenhou = false; is_chiihou = false; is_menzen = Player.is_menzen player; is_haitei = false; is_houtei = false; dora_count = dora_n + uradora_n + aka_n;
         bakaze = game.bakaze; jikaze = player.jikaze;
       } in
@@ -448,6 +448,7 @@ let do_pon seat : string =
           players;
           current_turn = seat;
           phase = Game.WaitingDiscard;
+          no_calls_yet = false;
           last_discard = None;
           last_discard_player = None;
         } in
@@ -516,6 +517,7 @@ let do_chi seat t1_kind t1_suit t1_num t2_kind t2_suit t2_num : string =
           players;
           current_turn = seat;
           phase = Game.WaitingDiscard;
+          no_calls_yet = false;
           last_discard = None;
           last_discard_player = None;
         } in

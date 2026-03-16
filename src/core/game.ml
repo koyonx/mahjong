@@ -25,6 +25,8 @@ type round = {
   phase : phase;               (** フェーズ *)
   last_discard : Tile.tile option;       (** 直前の捨て牌 *)
   last_discard_player : int option;      (** 直前の捨て牌のプレイヤー *)
+  first_turns : bool array;              (** 各プレイヤーの最初のターンか（ダブルリーチ判定用） *)
+  no_calls_yet : bool;                   (** まだ鳴きが入っていないか *)
 }
 
 (** 自風を局数から決定 *)
@@ -112,6 +114,8 @@ let new_round (bakaze : bakaze) (kyoku : int) (honba : int) (riichi_sticks : int
     phase = WaitingDraw;
     last_discard = None;
     last_discard_player = None;
+    first_turns = [| true; true; true; true |];
+    no_calls_yet = true;
   }
 
 (** ゲーム開始（席順ランダム、東1局から） *)
@@ -151,11 +155,14 @@ let discard_tile (game : round) (tile : Tile.tile) : (round, string) result =
     | Ok new_player ->
       let players = Array.copy game.players in
       players.(game.current_turn) <- new_player;
+      let ft = Array.copy game.first_turns in
+      ft.(game.current_turn) <- false;
       Ok { game with
            players;
            phase = WaitingCall;
            last_discard = Some tile;
-           last_discard_player = Some game.current_turn }
+           last_discard_player = Some game.current_turn;
+           first_turns = ft }
     | Error e -> Error e
 
 (** 鳴きがなければ次の手番に進む *)
@@ -188,7 +195,7 @@ let ron (game : round) (winner : int) : (round, string) result =
     let ctx = {
       Yaku.is_tsumo = false;
       is_riichi = player.is_riichi;
-      is_double_riichi = false;
+      is_double_riichi = player.is_double_riichi;
       is_ippatsu = player.is_ippatsu;
       is_tenhou = false;
       is_chiihou = false;
@@ -222,7 +229,7 @@ let tsumo_agari (game : round) : (round, string) result =
   let ctx = {
     Yaku.is_tsumo = true;
     is_riichi = player.is_riichi;
-    is_double_riichi = false;
+    is_double_riichi = player.is_double_riichi;
     is_ippatsu = player.is_ippatsu;
     is_tenhou = false;
     is_chiihou = false;
@@ -266,6 +273,9 @@ let declare_riichi (game : round) : (round, string) result =
   let player = game.players.(game.current_turn) in
   match Player.declare_riichi player with
   | Ok new_player ->
+    (* ダブルリーチ: 最初のターンかつ鳴きなし *)
+    let is_double = game.first_turns.(game.current_turn) && game.no_calls_yet in
+    let new_player = { new_player with is_double_riichi = is_double } in
     let players = Array.copy game.players in
     players.(game.current_turn) <- new_player;
     Ok { game with players; riichi_sticks = game.riichi_sticks + 1 }

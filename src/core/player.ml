@@ -13,6 +13,7 @@ type t = {
   furo_list : furo list;       (** 副露リスト *)
   kawa : Tile.tile list;       (** 河（捨て牌） *)
   is_riichi : bool;            (** リーチ宣言済みか *)
+  is_double_riichi : bool;     (** ダブルリーチか *)
   is_ippatsu : bool;           (** 一発の可能性があるか *)
   jikaze : Tile.jihai;         (** 自風 *)
   score : int;                 (** 持ち点 *)
@@ -28,6 +29,7 @@ let create (jikaze : Tile.jihai) : t = {
   furo_list = [];
   kawa = [];
   is_riichi = false;
+  is_double_riichi = false;
   is_ippatsu = false;
   jikaze;
   score = 25000;
