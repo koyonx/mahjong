@@ -709,6 +709,107 @@ let do_kakan seat kind suit number : string =
       game_state_to_json new_game
     | Error _ -> json_null
 
+(* === fu_detail: 符の詳細 === *)
+
+let get_fu_breakdown seat : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    let player = game.players.(seat) in
+    let furo_count = List.length player.furo_list in
+    let patterns = Mentsu.find_agari_patterns_furo player.hand.tiles furo_count in
+    let extra = List.map Yaku.furo_to_mentsu player.furo_list in
+    let full_patterns = List.map (fun (p : Mentsu.agari_pattern) ->
+      { p with Mentsu.mentsu_list = p.mentsu_list @ extra }
+    ) patterns in
+    match Fu_detail.best_fu_breakdown full_patterns player.hand.tsumo
+      game.Game.players.(seat).is_riichi (* is_tsumo approximation *)
+      (Player.is_menzen player) furo_count game.bakaze player.jikaze with
+    | None -> json_null
+    | Some bd ->
+      let mentsu_json = json_arr (List.map (fun d ->
+        json_obj [("type", json_str d.Fu_detail.mentsu_type);
+                  ("tile", json_str d.tile_label); ("fu", json_int d.fu)]
+      ) bd.mentsu_fu_list) in
+      json_obj [
+        ("base_fu", json_int bd.base_fu);
+        ("mentsu", mentsu_json);
+        ("jantai_fu", json_int bd.jantai_fu);
+        ("wait_type", json_str (Fu_detail.wait_type_to_string bd.wait_type));
+        ("wait_type_ja", json_str (Fu_detail.wait_type_to_ja bd.wait_type));
+        ("wait_fu", json_int bd.wait_fu);
+        ("tsumo_fu", json_int bd.tsumo_fu);
+        ("total_fu", json_int bd.total_fu);
+        ("rounded_fu", json_int bd.rounded_fu)
+      ]
+
+(* === analyzer: 手牌分析 === *)
+
+let get_hand_analysis seat : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    let player = game.players.(seat) in
+    let furo_count = List.length player.furo_list in
+    let visible = ref [] in
+    Array.iter (fun (p : Player.t) ->
+      visible := List.rev_append p.kawa !visible
+    ) game.players;
+    let has_riichi = Array.exists (fun (p : Player.t) ->
+      p.is_riichi && Tile.compare (Tile.Jihai p.jikaze) (Tile.Jihai player.jikaze) <> 0
+    ) game.players in
+    let dora = List.map Wall.dora_of_indicator (Wall.dora_indicators game.wall game.kan_count) in
+    let analysis = Analyzer.analyze_hand player.hand.tiles furo_count
+      !visible game.bakaze player.jikaze dora has_riichi in
+    let discards_json = json_arr (List.map (fun (d : Analyzer.discard_analysis) ->
+      json_obj [
+        ("tile", tile_to_json d.tile);
+        ("shanten", json_int d.shanten_after);
+        ("acceptance", json_int d.acceptance);
+        ("waits", json_arr (List.map tile_to_json d.wait_tiles));
+        ("han", json_int d.estimated_han);
+        ("reason", json_str d.reason)
+      ]
+    ) (List.filteri (fun i _ -> i < 5) analysis.best_discards)) in
+    json_obj [
+      ("shanten", json_int analysis.current_shanten);
+      ("is_tenpai", json_bool analysis.is_tenpai);
+      ("direction", json_str analysis.hand_direction);
+      ("action", json_str analysis.recommended_action);
+      ("discards", discards_json)
+    ]
+
+(* === simulation: 勝率推定 === *)
+
+let get_win_probability seat trials : string =
+  match !game_ref with
+  | None -> json_null
+  | Some game ->
+    let player = game.players.(seat) in
+    let furo_count = List.length player.furo_list in
+    let visible = ref [] in
+    Array.iter (fun (p : Player.t) ->
+      visible := List.rev_append p.kawa !visible
+    ) game.players;
+    let remaining = Wall.remaining game.wall in
+    let sim = Simulation.run_simulation player.hand.tiles furo_count
+      !visible game.bakaze player.jikaze trials (min 18 remaining) in
+    json_obj [
+      ("trials", json_int sim.trials);
+      ("win_rate", json_str (Printf.sprintf "%.1f" (sim.win_rate *. 100.0)));
+      ("avg_score", json_str (Printf.sprintf "%.0f" sim.avg_score));
+      ("tenpai_rate", json_str (Printf.sprintf "%.1f" (sim.tenpai_rate *. 100.0)))
+    ]
+
+(* === hafu: 牌譜 === *)
+
+let hand_to_hafu_short seat : string =
+  match !game_ref with
+  | None -> json_str ""
+  | Some game ->
+    let player = game.players.(seat) in
+    json_str (Hafu.hand_to_short player.hand.tiles)
+
 (** === ゲームプレイ補助 === *)
 
 let get_wait_counts seat : string =

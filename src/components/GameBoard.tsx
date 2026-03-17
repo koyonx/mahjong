@@ -10,6 +10,7 @@ import {
   canKyuushu, declareKyuushu,
   aiShouldPon, aiShouldChi,
   getWaitCounts, getShanten, getDangerTiles,
+  getHandAnalysis, getWinProbability,
   type RiichiDiscardOption,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
@@ -568,6 +569,8 @@ export function GameBoard({ onBack }: GameBoardProps) {
             shanten={getShanten(HUMAN_SEAT)}
             waitCounts={getWaitCounts(HUMAN_SEAT)}
             dangerTiles={getDangerTiles(HUMAN_SEAT)}
+            handAnalysis={assistConfig.showAnalysis ? getHandAnalysis(HUMAN_SEAT) : null}
+            winProb={assistConfig.showWinRate ? getWinProbability(HUMAN_SEAT, 50) : null}
           />
         )}
         {riichiMode && riichiOptions.length > 0 ? (
