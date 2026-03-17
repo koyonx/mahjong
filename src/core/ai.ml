@@ -278,6 +278,257 @@ let betaori_score (tile : Tile.tile) (other_kawas : Tile.tile list list) (visibl
   | Tile.Suhai (_, n) when n = 2 || n = 8 -> 50  (* 準端牌 *)
   | _ -> 70  (* 中張牌: 最も危険 *)
 
+(** === 手役価値推定 === *)
+
+(* 手牌の色偏りを計算 *)
+let suit_concentration (tiles : Tile.tile list) : (int * int * int * int) =
+  let m = ref 0 and p = ref 0 and s = ref 0 and j = ref 0 in
+  List.iter (fun t -> match t with
+    | Tile.Suhai (Tile.Manzu, _) -> incr m
+    | Tile.Suhai (Tile.Pinzu, _) -> incr p
+    | Tile.Suhai (Tile.Souzu, _) -> incr s
+    | Tile.Jihai _ -> incr j
+  ) tiles;
+  (!m, !p, !s, !j)
+
+(* 役路線の推定: 手牌の方向性を数値化 *)
+type yaku_path = {
+  honitsu_score : int;    (* 混一色の見込み *)
+  chinitsu_score : int;   (* 清一色の見込み *)
+  tanyao_score : int;     (* 断么九の見込み *)
+  toitoi_score : int;     (* 対々和の見込み *)
+  yakuhai_count : int;    (* 役牌の対子/刻子数 *)
+  dora_in_hand : int;     (* 手牌中のドラ枚数 *)
+}
+
+let analyze_yaku_path (tiles : Tile.tile list) (bakaze : Tile.jihai) (jikaze : Tile.jihai) (dora_tiles : Tile.tile list) : yaku_path =
+  let (m, p, s, j) = suit_concentration tiles in
+  let total = List.length tiles in
+  let dominant = max m (max p s) in
+
+  (* 混一色/清一色: 1スートが圧倒的に多い *)
+  let honitsu_score = if dominant + j >= total - 2 then dominant + j else 0 in
+  let chinitsu_score = if j = 0 && dominant >= total - 2 then dominant else 0 in
+
+  (* 断么九: 么九牌が少ない *)
+  let yaochu_count = List.length (List.filter (fun t ->
+    match t with
+    | Tile.Suhai (_, n) -> n = 1 || n = 9
+    | Tile.Jihai _ -> true
+  ) tiles) in
+  let tanyao_score = if yaochu_count <= 2 then total - yaochu_count else 0 in
+
+  (* 対々和: 対子/刻子が多い *)
+  let c = counts_of_tiles tiles in
+  let pair_or_more = Array.fold_left (fun acc cnt -> if cnt >= 2 then acc + 1 else acc) 0 c in
+  let toitoi_score = if pair_or_more >= 3 then pair_or_more * 2 else 0 in
+
+  (* 役牌 *)
+  let yakuhai_count = ref 0 in
+  let check_yh j =
+    let idx = tile_to_index (Tile.Jihai j) in
+    if c.(idx) >= 2 then incr yakuhai_count
+  in
+  check_yh Tile.Haku; check_yh Tile.Hatsu; check_yh Tile.Chun;
+  check_yh bakaze; check_yh jikaze;
+
+  (* ドラ枚数 *)
+  let dora_in_hand = List.fold_left (fun acc t ->
+    acc + List.length (List.filter (fun d -> Tile.compare d t = 0) dora_tiles)
+  ) 0 tiles in
+
+  { honitsu_score; chinitsu_score; tanyao_score; toitoi_score;
+    yakuhai_count = !yakuhai_count; dora_in_hand }
+
+(* 推定翻数: 手が完成した場合の期待翻数 *)
+let estimate_hand_han (path : yaku_path) (is_menzen : bool) : int =
+  let base = ref 0 in
+  if path.chinitsu_score > 0 then base := !base + (if is_menzen then 6 else 5)
+  else if path.honitsu_score > 0 then base := !base + (if is_menzen then 3 else 2);
+  if path.tanyao_score > 0 then base := !base + 1;
+  if path.toitoi_score > 0 then base := !base + 2;
+  base := !base + path.yakuhai_count;
+  base := !base + path.dora_in_hand;
+  if is_menzen then base := !base + 1;  (* リーチ想定 *)
+  !base
+
+(** === 捨て牌読み: リーチ者の危険スート推定 === *)
+
+let analyze_riichi_discard_pattern (kawa : Tile.tile list) : float * float * float =
+  (* 各スートの捨て牌数を数える。多く捨てたスートは安全、少ないスートは危険 *)
+  let m = ref 0 and p = ref 0 and s = ref 0 in
+  List.iter (fun t -> match t with
+    | Tile.Suhai (Tile.Manzu, _) -> incr m
+    | Tile.Suhai (Tile.Pinzu, _) -> incr p
+    | Tile.Suhai (Tile.Souzu, _) -> incr s
+    | _ -> ()
+  ) kawa;
+  let total = float_of_int (max 1 (!m + !p + !s)) in
+  let fm = float_of_int !m /. total in
+  let fp = float_of_int !p /. total in
+  let fs = float_of_int !s /. total in
+  (* 多く捨てた=安全(低い値), 少ない=危険(高い値) *)
+  (1.0 -. fm, 1.0 -. fp, 1.0 -. fs)
+
+let suit_danger_of_tile (tile : Tile.tile) (danger_m : float) (danger_p : float) (danger_s : float) : float =
+  match tile with
+  | Tile.Suhai (Tile.Manzu, _) -> danger_m
+  | Tile.Suhai (Tile.Pinzu, _) -> danger_p
+  | Tile.Suhai (Tile.Souzu, _) -> danger_s
+  | Tile.Jihai _ -> 0.3  (* 字牌は比較的安全 *)
+
+(** === 点数状況判断 === *)
+
+type score_situation = {
+  rank : int;              (* 1〜4位 *)
+  gap_to_1st : int;        (* 1位との差 *)
+  is_oya : bool;           (* 親か *)
+  need_big_hand : bool;    (* 大きな手が必要か *)
+  should_be_cautious : bool; (* 安全に打つべきか *)
+}
+
+let analyze_score_situation (player : Player.t) (all_players : Player.t array) : score_situation =
+  let my_score = player.score in
+  let scores = Array.to_list (Array.map (fun (p : Player.t) -> p.score) all_players) in
+  let sorted = List.sort (fun a b -> compare b a) scores in
+  let rank = ref 1 in
+  List.iter (fun s -> if s > my_score then incr rank) sorted;
+  let top_score = List.hd sorted in
+  let gap = top_score - my_score in
+  let is_oya = player.jikaze = Tile.Ton in
+  {
+    rank = !rank;
+    gap_to_1st = gap;
+    is_oya;
+    need_big_hand = gap > 12000 && !rank >= 3;
+    should_be_cautious = !rank = 1 && gap < 5000;
+  }
+
+(** === 鳴き時の役チェック === *)
+
+(* 鳴いた後に最低1つの役が残るか確認 *)
+let has_yaku_after_call (tiles_after : Tile.tile list) (furo_after : Player.furo list) (bakaze : Tile.jihai) (jikaze : Tile.jihai) : bool =
+  (* 鳴いた後は門前限定役が使えない。残る可能性のある役をチェック *)
+  let all_tiles = tiles_after @ List.concat_map (fun f ->
+    match f with
+    | Player.Chi (t1, t2, t3) -> [t1; t2; t3]
+    | Player.Pon t -> [t; t; t]
+    | Player.Minkan t | Player.Ankan t -> [t; t; t; t]
+  ) furo_after in
+
+  (* 断么九 *)
+  let is_tanyao = List.for_all (fun t ->
+    match t with Tile.Suhai (_, n) -> n >= 2 && n <= 8 | _ -> false
+  ) all_tiles in
+
+  (* 役牌: 副露に役牌刻子があるか *)
+  let has_yakuhai = List.exists (fun f ->
+    match f with
+    | Player.Pon (Tile.Jihai j) | Player.Minkan (Tile.Jihai j) ->
+      j = Tile.Haku || j = Tile.Hatsu || j = Tile.Chun || j = bakaze || j = jikaze
+    | _ -> false
+  ) furo_after in
+
+  (* 混一色/清一色 *)
+  let (m, p, s, j) = suit_concentration all_tiles in
+  let total = List.length all_tiles in
+  let dominant = max m (max p s) in
+  let is_honitsu = dominant + j >= total in
+  let is_chinitsu = j = 0 && dominant >= total in
+
+  (* 対々和 *)
+  let is_toitoi = List.for_all (fun f ->
+    match f with Player.Pon _ | Player.Minkan _ | Player.Ankan _ -> true | _ -> false
+  ) furo_after in
+
+  is_tanyao || has_yakuhai || is_honitsu || is_chinitsu || is_toitoi
+
+(** 攻防モード判定 *)
+type strategy = Attack | Balanced | Defense | Full_betaori
+
+let choose_strategy_internal ~(level:int) (hand_tiles : Tile.tile list) (furo_count : int)
+    (riichi_players : bool list) (remaining : int) : strategy =
+  if level < 7 then Attack
+  else
+    let sh = estimate_shanten hand_tiles furo_count in
+    let riichi_count = List.length (List.filter (fun r -> r) riichi_players) in
+    if riichi_count = 0 then Attack
+    else if sh = 0 then Balanced
+    else if sh = 1 && level >= 8 then Balanced
+    else if sh >= 3 then Full_betaori
+    else if sh = 2 && riichi_count >= 2 then Full_betaori
+    else if sh = 2 && remaining < 20 then Full_betaori
+    else Defense
+
+(** === 統合重み付け評価（Lv10用） === *)
+
+(* 全要素を統合した打牌評価スコア *)
+let evaluate_tile_lv10 (tile : Tile.tile) (hand_tiles : Tile.tile list)
+    (other_kawas : Tile.tile list list) (riichi_players : bool list)
+    (visible_tiles : Tile.tile list) (bakaze : Tile.jihai) (jikaze : Tile.jihai)
+    (dora_tiles : Tile.tile list) (score_sit : score_situation)
+    (strategy : strategy) : int =
+
+  (* === 1. 受入枚数（最重要） === *)
+  let acceptance = match Mentsu.remove_one tile hand_tiles with
+    | Some rest -> calc_acceptance rest 0 visible_tiles
+    | None -> 0
+  in
+
+  (* === 2. 手役価値への貢献 === *)
+  let path_before = analyze_yaku_path hand_tiles bakaze jikaze dora_tiles in
+  let path_after = match Mentsu.remove_one tile hand_tiles with
+    | Some rest -> analyze_yaku_path rest bakaze jikaze dora_tiles
+    | None -> path_before
+  in
+  let han_before = estimate_hand_han path_before true in
+  let han_after = estimate_hand_han path_after true in
+  let value_loss = max 0 (han_before - han_after) in  (* この牌を捨てると失う翻数 *)
+
+  (* === 3. ドラ温存 === *)
+  let is_dora = List.exists (fun d -> Tile.compare d tile = 0) dora_tiles in
+  let dora_penalty = if is_dora then 40 else 0 in  (* ドラは捨てにくい *)
+
+  (* === 4. 防御（リーチ者への危険度） === *)
+  let riichi_kawas = List.filter_map (fun (r, k) ->
+    if r then Some k else None
+  ) (List.combine riichi_players other_kawas) in
+  let danger = betaori_score tile other_kawas visible_tiles riichi_kawas in
+
+  (* リーチ者の捨て牌パターンからスート危険度 *)
+  let suit_danger = List.fold_left (fun acc kawa ->
+    let (dm, dp, ds) = analyze_riichi_discard_pattern kawa in
+    acc +. suit_danger_of_tile tile dm dp ds
+  ) 0.0 riichi_kawas in
+
+  (* === 5. 点数状況による重み調整 === *)
+  let offense_weight = match strategy with
+    | Full_betaori -> 0    (* 完全守備: 攻撃価値ゼロ *)
+    | Defense -> 3          (* 守備寄り *)
+    | Balanced -> 7         (* バランス *)
+    | Attack -> 10          (* 全力攻撃 *)
+  in
+  let defense_weight = match strategy with
+    | Full_betaori -> 10
+    | Defense -> 8
+    | Balanced -> 4
+    | Attack -> if score_sit.should_be_cautious then 3 else 1
+  in
+
+  (* === 統合スコア（低いほど捨てやすい） === *)
+  let offense_score =
+    acceptance * 25                           (* 受入枚数 *)
+    + value_loss * 30                         (* 手役価値損失 *)
+    + dora_penalty                            (* ドラ温存 *)
+    + (if score_sit.need_big_hand then value_loss * 20 else 0)  (* 大きな手が必要なら価値重視 *)
+  in
+  let defense_score =
+    danger * 3                                (* ベタオリスコア *)
+    + int_of_float (suit_danger *. 20.0)      (* スート危険度 *)
+  in
+  (* 重み付け統合 *)
+  offense_score * offense_weight - defense_score * defense_weight
+
 (** === レベル別打牌評価 === *)
 
 (** レベル対応の牌評価 *)
@@ -356,22 +607,7 @@ let evaluate_tile_leveled ~(level:int) tile hand_tiles
 
   pair_bonus + sequence_bonus + isolation - edge + acceptance + defense
 
-(** 攻防モード判定（Lv7+） *)
-type strategy = Attack | Balanced | Defense | Full_betaori
-
-let choose_strategy ~(level:int) (hand_tiles : Tile.tile list) (furo_count : int)
-    (riichi_players : bool list) (remaining : int) : strategy =
-  if level < 7 then Attack
-  else
-    let sh = estimate_shanten hand_tiles furo_count in
-    let riichi_count = List.length (List.filter (fun r -> r) riichi_players) in
-    if riichi_count = 0 then Attack
-    else if sh = 0 then Balanced  (* テンパイ vs リーチ: 押し *)
-    else if sh = 1 && level >= 8 then Balanced  (* 1向聴: バランス *)
-    else if sh >= 3 then Full_betaori  (* 3向聴以上: 完全ベタオリ *)
-    else if sh = 2 && riichi_count >= 2 then Full_betaori  (* 複数リーチ *)
-    else if sh = 2 && remaining < 20 then Full_betaori  (* 終盤 *)
-    else Defense  (* 2向聴: 慎重 *)
+let choose_strategy = choose_strategy_internal
 
 (** レベル別打牌選択 *)
 let choose_discard_leveled ~(level:int) (hand_tiles : Tile.tile list)
@@ -388,30 +624,31 @@ let choose_discard_leveled ~(level:int) (hand_tiles : Tile.tile list)
       let pool = if singles = [] then candidates else singles in
       List.nth pool (Random.int (List.length pool))
     end else if level >= 9 then begin
-      (* Lv9-10: 攻防モードに基づく打牌 *)
-      let furo_count = 0 in  (* TODO: 副露数を外から渡す *)
-      let remaining = 70 in  (* TODO *)
-      let riichi_kawas = List.filter_map (fun (r, k) -> if r then Some k else None)
-        (List.combine riichi_players other_kawas) in
+      (* Lv9-10: 統合重み付け評価 *)
+      let furo_count = 0 in
+      let remaining = max 0 (122 - List.length (List.concat other_kawas)) in
       let strategy = choose_strategy ~level hand_tiles furo_count riichi_players remaining in
+      (* ダミーのプレイヤー情報（score_situation用） *)
+      let score_sit = { rank = 2; gap_to_1st = 0; is_oya = false;
+                        need_big_hand = false; should_be_cautious = false } in
+      let bakaze = Tile.Ton in  (* decide_leveledから渡すべきだが暫定 *)
+      let jikaze = Tile.Ton in
+      (* ドラ牌（暫定: 空） *)
+      let dora_tiles = [] in
       match strategy with
       | Full_betaori ->
-        (* 完全ベタオリ: 安全度のみで選択 *)
+        let riichi_kawas = List.filter_map (fun (r, k) ->
+          if r then Some k else None
+        ) (List.combine riichi_players other_kawas) in
         let scored = List.map (fun t ->
           (t, betaori_score t other_kawas visible_tiles riichi_kawas)
         ) candidates in
         let sorted = List.sort (fun (_, s1) (_, s2) -> compare s1 s2) scored in
         fst (List.hd sorted)
       | _ ->
-        (* 攻撃/バランス: 受入枚数 + 防御バランス *)
         let scored2 = List.map (fun t ->
-          let base = evaluate_tile_leveled ~level t hand_tiles other_kawas riichi_players visible_tiles in
-          let danger = match strategy with
-            | Defense -> betaori_score t other_kawas visible_tiles riichi_kawas * 2
-            | Balanced -> betaori_score t other_kawas visible_tiles riichi_kawas
-            | _ -> 0
-          in
-          (t, base - danger)
+          (t, evaluate_tile_lv10 t hand_tiles other_kawas riichi_players
+               visible_tiles bakaze jikaze dora_tiles score_sit strategy)
         ) candidates in
         let sorted = List.sort (fun (_, s1) (_, s2) -> compare s1 s2) scored2 in
         fst (List.hd sorted)
@@ -431,7 +668,7 @@ let choose_discard ?(difficulty=Normal) ?(other_kawas=[]) ?(riichi_players=[]) (
 (** === 鳴き判断 === *)
 
 let should_pon_leveled ~(level:int) (player : Player.t) (tile : Tile.tile) (bakaze : Tile.jihai) : bool =
-  if level < 6 then false  (* Lv5以下は鳴かない *)
+  if level < 6 then false
   else
     let count = count_tile tile player.hand.tiles in
     if count < 2 then false
@@ -445,14 +682,19 @@ let should_pon_leveled ~(level:int) (player : Player.t) (tile : Tile.tile) (baka
         | None -> false
         | Some rest2 ->
           let new_shanten = estimate_shanten rest2 (furo_count + 1) in
-          if new_shanten < current_shanten then true
-          else if new_shanten = current_shanten && level >= 6 then
-            match tile with
-            | Tile.Jihai j ->
-              j = Tile.Haku || j = Tile.Hatsu || j = Tile.Chun ||
-              j = bakaze || j = player.jikaze
-            | _ -> false
-          else false
+          let shanten_ok = new_shanten < current_shanten ||
+            (new_shanten = current_shanten && (match tile with
+              | Tile.Jihai j ->
+                j = Tile.Haku || j = Tile.Hatsu || j = Tile.Chun ||
+                j = bakaze || j = player.jikaze
+              | _ -> false))
+          in
+          if not shanten_ok then false
+          else if level >= 9 then
+            (* Lv9+: 鳴いた後に役が残るかチェック *)
+            let new_furo = Player.Pon tile :: player.furo_list in
+            has_yaku_after_call rest2 new_furo bakaze player.jikaze
+          else true
 
 let should_chi_leveled ~(level:int) (player : Player.t) (t1 : Tile.tile) (t2 : Tile.tile) : bool =
   if level < 7 then false  (* Lv6以下はチーしない *)
