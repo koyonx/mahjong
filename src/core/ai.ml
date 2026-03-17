@@ -153,8 +153,85 @@ let choose_discard ?(difficulty=Normal) ?(other_kawas=[]) ?(riichi_players=[]) (
   | Normal -> choose_discard_normal hand_tiles
   | Hard -> choose_discard_hard hand_tiles other_kawas riichi_players
 
-(** リーチ判定 *)
-let should_riichi ?(difficulty=Normal) (player : Player.t) : bool =
+(* 向聴数の簡易計算: 手牌から和了に必要な最小交換枚数を推定 *)
+let estimate_shanten (tiles : Tile.tile list) (furo_count : int) : int =
+  let needed = 4 - furo_count in
+  (* テンパイチェック（0向聴） *)
+  let n = List.length tiles in
+  if n = needed * 3 + 1 then
+    (* 13枚: テンパイなら0 *)
+    let suits = [Tile.Manzu; Tile.Pinzu; Tile.Souzu] in
+    let numbers = [1; 2; 3; 4; 5; 6; 7; 8; 9] in
+    let jihais = [Tile.Ton; Tile.Nan; Tile.Sha; Tile.Pei; Tile.Haku; Tile.Hatsu; Tile.Chun] in
+    let candidates =
+      List.concat_map (fun s -> List.map (fun n -> Tile.Suhai (s, n)) numbers) suits @
+      List.map (fun j -> Tile.Jihai j) jihais
+    in
+    if List.exists (fun t ->
+      Mentsu.find_agari_patterns_furo (List.sort Tile.compare (t :: tiles)) furo_count <> []
+    ) candidates then 0
+    else
+      (* 面子数と搭子数から推定 *)
+      let mentsu_count = ref 0 in
+      let taatsu_count = ref 0 in
+      let used = ref [] in
+      List.iter (fun t ->
+        if not (List.exists (fun u -> Tile.compare u t = 0) !used) then begin
+          let cnt = count_tile t tiles in
+          if cnt >= 3 then (incr mentsu_count; used := t :: !used)
+          else if cnt = 2 then (incr taatsu_count; used := t :: !used)
+        end
+      ) tiles;
+      let partial = !mentsu_count + !taatsu_count in
+      max 1 (needed - partial)
+  else max 1 (needed * 2 - n / 3)
+
+(** === 鳴き判断（Hard AI用） === *)
+
+(** ポンすべきか判断 *)
+let should_pon (player : Player.t) (tile : Tile.tile) (bakaze : Tile.jihai) : bool =
+  (* 手牌に2枚あるか確認 *)
+  let count = count_tile tile player.hand.tiles in
+  if count < 2 then false
+  else
+    let furo_count = List.length player.furo_list in
+    let current_shanten = estimate_shanten player.hand.tiles furo_count in
+    (* ポン後の向聴数を計算 *)
+    match Mentsu.remove_one tile player.hand.tiles with
+    | None -> false
+    | Some rest1 ->
+      match Mentsu.remove_one tile rest1 with
+      | None -> false
+      | Some rest2 ->
+        let new_shanten = estimate_shanten rest2 (furo_count + 1) in
+        (* 向聴数が下がる場合のみポン *)
+        if new_shanten < current_shanten then true
+        (* 役牌なら向聴数が同じでもポン *)
+        else if new_shanten = current_shanten then
+          match tile with
+          | Tile.Jihai j ->
+            j = Tile.Haku || j = Tile.Hatsu || j = Tile.Chun ||
+            j = bakaze || j = player.jikaze
+          | _ -> false
+        else false
+
+(** チーすべきか判断 *)
+let should_chi (player : Player.t) (t1 : Tile.tile) (t2 : Tile.tile) : bool =
+  let furo_count = List.length player.furo_list in
+  let current_shanten = estimate_shanten player.hand.tiles furo_count in
+  match Mentsu.remove_one t1 player.hand.tiles with
+  | None -> false
+  | Some rest1 ->
+    match Mentsu.remove_one t2 rest1 with
+    | None -> false
+    | Some rest2 ->
+      let new_shanten = estimate_shanten rest2 (furo_count + 1) in
+      (* テンパイに近づく場合（2向聴以下）のみチー *)
+      new_shanten < current_shanten && current_shanten <= 2
+
+(** === リーチ戦略（Hard AI） === *)
+
+let should_riichi_hard (player : Player.t) (bakaze : Tile.jihai) (remaining_tiles : int) : bool =
   if player.is_riichi then false
   else if not (Player.is_menzen player) then false
   else if player.score < 1000 then false
@@ -168,11 +245,57 @@ let should_riichi ?(difficulty=Normal) (player : Player.t) : bool =
     in
     if List.length hand_13 <> 13 then false
     else
-      let tenpai = Hand.tenpai_tiles (Hand.make hand_13) <> [] in
-      match difficulty with
-      | Easy -> tenpai && Random.int 3 = 0  (* 1/3の確率でリーチ *)
-      | Normal -> tenpai
-      | Hard -> tenpai  (* Hardも常にリーチ（将来的にダマテン戦略追加可能） *)
+      let waits = Hand.tenpai_tiles (Hand.make hand_13) in
+      if waits = [] then false
+      else
+        let wait_count = List.length waits in
+        (* ダマテン判断: 既に役がある高い手ならリーチしない場合がある *)
+        let ctx = {
+          Yaku.is_tsumo = true; is_riichi = false; is_double_riichi = false;
+          is_ippatsu = false; is_tenhou = false; is_chiihou = false;
+          is_menzen = true; is_haitei = false; is_houtei = false;
+          dora_count = 0; agari_tile = None; bakaze; jikaze = player.jikaze;
+        } in
+        let is_oya = player.jikaze = Tile.Ton in
+        (* 各待ち牌で和了した場合の役を確認 *)
+        let has_yaku_without_riichi = List.exists (fun w ->
+          let test = List.sort Tile.compare (w :: hand_13) in
+          match Scoring.score_hand test ctx is_oya with
+          | Some result -> result.han_detail >= 3  (* 3翻以上ならダマテンの価値あり *)
+          | None -> false
+        ) waits in
+        if has_yaku_without_riichi && wait_count >= 2 then
+          (* 高い手で待ちが広い → ダマテン（リーチしない） *)
+          false
+        else if remaining_tiles < 20 then
+          (* 残り牌が少ない → リーチして裏ドラ狙い *)
+          true
+        else
+          (* 通常: リーチ *)
+          true
+
+(** リーチ判定 *)
+let should_riichi ?(difficulty=Normal) ?(bakaze=Tile.Ton) ?(remaining_tiles=70) (player : Player.t) : bool =
+  match difficulty with
+  | Hard -> should_riichi_hard player bakaze remaining_tiles
+  | _ ->
+    if player.is_riichi then false
+    else if not (Player.is_menzen player) then false
+    else if player.score < 1000 then false
+    else
+      let hand_13 = match player.hand.tsumo with
+        | Some tsumo_tile ->
+          (match Mentsu.remove_one tsumo_tile player.hand.tiles with
+           | Some rest -> rest
+           | None -> player.hand.tiles)
+        | None -> player.hand.tiles
+      in
+      if List.length hand_13 <> 13 then false
+      else
+        let tenpai = Hand.tenpai_tiles (Hand.make hand_13) <> [] in
+        match difficulty with
+        | Easy -> tenpai && Random.int 3 = 0
+        | _ -> tenpai
 
 (** CPUの行動を決定 *)
 type action =
@@ -180,7 +303,7 @@ type action =
   | DeclareRiichi of Tile.tile
   | TsumoAgari
 
-let decide ?(difficulty=Normal) ?(other_kawas=[]) ?(riichi_players=[]) (player : Player.t) (bakaze : Tile.jihai) : action =
+let decide ?(difficulty=Normal) ?(other_kawas=[]) ?(riichi_players=[]) ?(remaining_tiles=70) (player : Player.t) (bakaze : Tile.jihai) : action =
   let ctx = {
     Yaku.is_tsumo = true;
     is_riichi = player.is_riichi;
@@ -203,7 +326,7 @@ let decide ?(difficulty=Normal) ?(other_kawas=[]) ?(riichi_players=[]) (player :
   | Some _ -> TsumoAgari
   | None ->
     let tile = choose_discard ~difficulty ~other_kawas ~riichi_players player.hand.tiles in
-    if should_riichi ~difficulty player then
+    if should_riichi ~difficulty ~bakaze ~remaining_tiles player then
       DeclareRiichi tile
     else
       Discard tile

@@ -8,6 +8,7 @@ import {
   canMinkan, doMinkan, canAnkan, doAnkan, canKakan, doKakan,
   canDeclareRiichi, riichiDiscardCandidates, riichiDiscardWithWaits,
   canKyuushu, declareKyuushu,
+  aiShouldPon, aiShouldChi,
   type RiichiDiscardOption,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
@@ -116,6 +117,32 @@ export function GameBoard({ onBack }: GameBoardProps) {
         setAgariWinner(`${kazeToJa(currentState.players[i].jikaze)}家`);
         setLastAgariWasDealerWin(currentState.players[i].jikaze === 'ton');
         return;
+      }
+    }
+
+    // CPUの鳴き判断（Hard AIのみ）
+    for (let i = 0; i < 4; i++) {
+      if (i === currentState.current_turn) continue;
+      if (i === HUMAN_SEAT) continue;
+      // CPUのポン判断
+      if (canPon(i) && aiShouldPon(i)) {
+        const ponState = doPon(i);
+        if (ponState) {
+          setState(ponState);
+          setMessage(`${kazeToJa(currentState.players[i].jikaze)}家がポン`);
+          // ポン後はCPUが打牌
+          setTimeout(() => {
+            const aiAction = aiDecide(i);
+            if (aiAction?.tile) {
+              const afterDiscard = discardTile(aiAction.tile);
+              if (afterDiscard) {
+                setState(afterDiscard);
+                setTimeout(() => processAfterDiscard(afterDiscard), 300);
+              }
+            }
+          }, 500);
+          return;
+        }
       }
     }
 

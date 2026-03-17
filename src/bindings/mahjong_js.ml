@@ -709,7 +709,6 @@ let do_kakan seat kind suit number : string =
       game_state_to_json new_game
     | Error _ -> json_null
 
-(** CPU AI の行動を決定 *)
 let ai_difficulty_ref : Ai.difficulty ref = ref Ai.Normal
 
 let set_ai_difficulty level =
@@ -717,6 +716,31 @@ let set_ai_difficulty level =
     | "easy" -> Ai.Easy
     | "hard" -> Ai.Hard
     | _ -> Ai.Normal
+
+(** Hard AIのポン判断 *)
+let ai_should_pon seat : bool =
+  match !game_ref with
+  | None -> false
+  | Some game ->
+    if !ai_difficulty_ref <> Ai.Hard then false
+    else
+      match game.last_discard with
+      | None -> false
+      | Some tile ->
+        let player = game.players.(seat) in
+        Ai.should_pon player tile game.bakaze
+
+(** Hard AIのチー判断 *)
+let ai_should_chi seat t1_kind t1_suit t1_num t2_kind t2_suit t2_num : bool =
+  match !game_ref with
+  | None -> false
+  | Some game ->
+    if !ai_difficulty_ref <> Ai.Hard then false
+    else
+      let player = game.players.(seat) in
+      let t1 = tile_of_kind_suit_number t1_kind t1_suit t1_num in
+      let t2 = tile_of_kind_suit_number t2_kind t2_suit t2_num in
+      Ai.should_chi player t1 t2
 
 let ai_decide seat : string =
   match !game_ref with
@@ -727,7 +751,8 @@ let ai_decide seat : string =
       if i = seat then [] else List.rev p.kawa
     ) game.players) in
     let riichi_players = Array.to_list (Array.map (fun (p : Player.t) -> p.is_riichi) game.players) in
-    match Ai.decide ~difficulty:!ai_difficulty_ref ~other_kawas ~riichi_players player game.bakaze with
+    let remaining = Wall.remaining game.wall in
+    match Ai.decide ~difficulty:!ai_difficulty_ref ~other_kawas ~riichi_players ~remaining_tiles:remaining player game.bakaze with
     | Ai.TsumoAgari -> json_obj [("action", json_str "tsumo")]
     | Ai.Discard tile ->
       json_obj [("action", json_str "discard"); ("tile", tile_to_json tile)]
