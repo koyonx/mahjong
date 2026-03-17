@@ -6,9 +6,12 @@ import { MultiplayerGameBoard } from './components/MultiplayerGameBoard';
 import { HelpPage } from './components/HelpPage';
 import { MatchHistory } from './components/MatchHistory';
 import { RuleSettings } from './components/RuleSettings';
+import { ReplayList } from './components/ReplayList';
+import { ReplayViewer } from './components/ReplayViewer';
+import { getReplay, type ReplayData } from './hooks/useReplay';
 import { useMultiplayer } from './hooks/useMultiplayer';
 
-type Mode = 'menu' | 'single' | 'multi' | 'help' | 'history' | 'rules';
+type Mode = 'menu' | 'single' | 'multi' | 'help' | 'history' | 'rules' | 'replay_list' | 'replay_view';
 
 function SinglePlayerApp({ onBack }: { onBack: () => void }) {
   const [ready, setReady] = useState(false);
@@ -90,6 +93,7 @@ function MultiplayerApp({ onBack }: { onBack: () => void }) {
 function App() {
   const [mode, setMode] = useState<Mode>('menu');
   const [difficulty, setDifficulty] = useState<AiDifficulty>('normal');
+  const [selectedReplay, setSelectedReplay] = useState<ReplayData | null>(null);
 
   const startSingle = (diff: AiDifficulty) => {
     setDifficulty(diff);
@@ -102,6 +106,8 @@ function App() {
   if (mode === 'help') return <HelpPage onBack={() => setMode('menu')} />;
   if (mode === 'history') return <MatchHistory onBack={() => setMode('menu')} />;
   if (mode === 'rules') return <RuleSettings onBack={() => setMode('menu')} />;
+  if (mode === 'replay_list') return <ReplayList onSelect={(id) => { setSelectedReplay(getReplay(id)); setMode('replay_view'); }} onBack={() => setMode('menu')} />;
+  if (mode === 'replay_view' && selectedReplay) return <ReplayViewer replay={selectedReplay} onBack={() => setMode('replay_list')} />;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-8">
@@ -158,6 +164,12 @@ function App() {
           className="px-8 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-bold rounded-xl transition"
         >
           ルール設定
+        </button>
+        <button
+          onClick={() => setMode('replay_list')}
+          className="px-8 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-bold rounded-xl transition"
+        >
+          リプレイ
         </button>
       </div>
     </div>
