@@ -400,11 +400,11 @@ let choose_discard_leveled ~(level:int) (hand_tiles : Tile.tile list)
         let scored = List.map (fun t ->
           (t, betaori_score t other_kawas visible_tiles riichi_kawas)
         ) candidates in
-        let sorted = List.sort (fun (_, s1) (_, s2) -> compare s1 s2) sorted in
+        let sorted = List.sort (fun (_, s1) (_, s2) -> compare s1 s2) scored in
         fst (List.hd sorted)
       | _ ->
         (* 攻撃/バランス: 受入枚数 + 防御バランス *)
-        let scored = List.map (fun t ->
+        let scored2 = List.map (fun t ->
           let base = evaluate_tile_leveled ~level t hand_tiles other_kawas riichi_players visible_tiles in
           let danger = match strategy with
             | Defense -> betaori_score t other_kawas visible_tiles riichi_kawas * 2
@@ -413,13 +413,13 @@ let choose_discard_leveled ~(level:int) (hand_tiles : Tile.tile list)
           in
           (t, base - danger)
         ) candidates in
-        let sorted = List.sort (fun (_, s1) (_, s2) -> compare s1 s2) sorted in
+        let sorted = List.sort (fun (_, s1) (_, s2) -> compare s1 s2) scored2 in
         fst (List.hd sorted)
     end else begin
       let scored = List.map (fun t ->
         (t, evaluate_tile_leveled ~level t hand_tiles other_kawas riichi_players visible_tiles)
       ) candidates in
-      let sorted = List.sort (fun (_, s1) (_, s2) -> compare s1 s2) sorted in
+      let sorted = List.sort (fun (_, s1) (_, s2) -> compare s1 s2) scored in
       fst (List.hd sorted)
     end
 
