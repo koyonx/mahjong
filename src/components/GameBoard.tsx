@@ -9,6 +9,7 @@ import {
   canDeclareRiichi, riichiDiscardCandidates, riichiDiscardWithWaits,
   canKyuushu, declareKyuushu,
   aiShouldPon, aiShouldChi,
+  getWaitCounts, getShanten, getDangerTiles,
   type RiichiDiscardOption,
 } from '../mahjong-bridge';
 import { PlayerHand } from './PlayerHand';
@@ -17,6 +18,8 @@ import { CenterPanel } from './CenterPanel';
 import { DoraDisplay } from './DoraDisplay';
 import { AgariDialog } from './AgariDialog';
 import { ScoreTransition } from './ScoreTransition';
+import { AssistSettings, loadAssistConfig, type AssistConfig } from './AssistSettings';
+import { AssistDisplay } from './AssistDisplay';
 import { TileView } from './TileView';
 
 const HUMAN_SEAT = 0;
@@ -35,6 +38,8 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [callInfo, setCallInfo] = useState<{ canPon: boolean; chiOptions: Tile[][]; canMinkan: boolean; canRon: boolean } | null>(null);
   const [riichiMode, setRiichiMode] = useState(false);
   const [chiSelectMode, setChiSelectMode] = useState(false);
+  const [assistConfig, setAssistConfig] = useState<AssistConfig>(loadAssistConfig());
+  const [showAssistSettings, setShowAssistSettings] = useState(false);
   const [scoreTransition, setScoreTransition] = useState<{
     before: { jikaze: string; score: number }[];
     after: { jikaze: string; score: number }[];
@@ -460,6 +465,16 @@ export function GameBoard({ onBack }: GameBoardProps) {
       {/* ドラ表示（左上） */}
       <DoraDisplay indicators={state.dora_indicators ?? []} />
 
+      {/* 補助設定ボタン */}
+      <button onClick={() => setShowAssistSettings(!showAssistSettings)} style={{
+        position: 'absolute', top: 8, left: 80, zIndex: 30,
+        padding: '4px 8px', background: 'rgba(0,0,0,0.4)', border: '1px solid #555',
+        borderRadius: 4, color: '#aaa', fontSize: 11, cursor: 'pointer',
+      }}>補助</button>
+      {showAssistSettings && (
+        <AssistSettings config={assistConfig} onChange={setAssistConfig} onClose={() => setShowAssistSettings(false)} />
+      )}
+
       {message && (
         <div style={{ textAlign: 'center', padding: '4px 0', color: '#8a8', fontSize: 12, flexShrink: 0 }}>
           {message}
@@ -512,6 +527,15 @@ export function GameBoard({ onBack }: GameBoardProps) {
           />
         </div>
         {/* リーチモード: 各候補の待ち牌を表示 */}
+        {/* ゲームプレイ補助 */}
+        {!riichiMode && state.current_turn === HUMAN_SEAT && (
+          <AssistDisplay
+            config={assistConfig}
+            shanten={getShanten(HUMAN_SEAT)}
+            waitCounts={getWaitCounts(HUMAN_SEAT)}
+            dangerTiles={getDangerTiles(HUMAN_SEAT)}
+          />
+        )}
         {riichiMode && riichiOptions.length > 0 ? (
           <div style={{ marginTop: 6 }}>
             {/* 選択中の牌の待ちをハイライト、未選択時は全候補表示 */}
