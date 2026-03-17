@@ -11,6 +11,7 @@ interface MultiplayerState {
   agariResult: { result: AgariResult; winnerSeat: number; winnerName: string } | null;
   turnInfo: { canTsumo: boolean; canRiichi: boolean; tenpaiTiles: Tile[] } | null;
   callInfo: { canPon: boolean; chiOptions: Tile[][] } | null;
+  isSpectator: boolean;
   messages: string[];
   error: string | null;
   gameEnd: { name: string; score: number }[] | null;
@@ -27,6 +28,7 @@ export function useMultiplayer() {
     agariResult: null,
     turnInfo: null,
     callInfo: null,
+    isSpectator: false,
     messages: [],
     error: null,
     gameEnd: null,
@@ -128,6 +130,9 @@ export function useMultiplayer() {
           gameEnd: null,
         }));
         break;
+      case 'spectating':
+        setState(s => ({ ...s, roomId: (msg as any).roomId, isSpectator: true }));
+        break;
       case 'can_call':
         setState(s => ({
           ...s,
@@ -195,6 +200,10 @@ export function useMultiplayer() {
     setState(s => ({ ...s, callInfo: null }));
   }, [send]);
 
+  const spectate = useCallback((roomId: string, playerName: string) => {
+    send({ type: 'spectate_room', roomId, playerName });
+  }, [send]);
+
   const leaveRoom = useCallback(() => {
     send({ type: 'leave_room' });
     // サーバーからroom_leftが返ってきた時にhandleMessageで状態リセットされる
@@ -212,6 +221,7 @@ export function useMultiplayer() {
     pon,
     chi,
     skipCall,
+    spectate,
     leaveRoom,
   };
 }

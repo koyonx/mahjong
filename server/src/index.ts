@@ -4,6 +4,7 @@ import {
   createRoom, joinRoom, getRoom, getRoomBySocket, getSeatBySocket,
   removePlayer, startGame as startRoomGame,
   broadcastToRoom, sendToSeat, cleanupRooms, type Room,
+  spectateRoom, removeSpectator,
 } from './room-manager.ts';
 import {
   initGameEngine,
@@ -49,6 +50,7 @@ async function main() {
     ws.on('close', () => {
       const room = getRoomBySocket(ws);
       if (room) {
+        removeSpectator(ws);
         removePlayer(ws);
         broadcastPlayerList(room);
       }
@@ -122,11 +124,26 @@ function handleMessage(ws: WebSocket, msg: { type: string; [key: string]: unknow
     case 'skip_call':
       handleSkipCall(ws);
       break;
+    case 'spectate_room':
+      handleSpectate(ws, msg.roomId as string, msg.playerName as string);
+      break;
     case 'leave_room':
       handleLeaveRoom(ws);
       break;
     default:
       sendError(ws, `不明なメッセージタイプ: ${msg.type}`);
+  }
+}
+
+function handleSpectate(ws: WebSocket, roomId: string, playerName: string): void {
+  const result = spectateRoom(ws, roomId, playerName);
+  if (result.error) { sendError(ws, result.error); return; }
+  sendJson(ws, { type: 'spectating', roomId });
+  const room = getRoom(roomId);
+  if (room) {
+    broadcastToRoom(room, () => JSON.stringify({
+      type: 'message', text: `${playerName} が観戦を開始しました`,
+    }));
   }
 }
 

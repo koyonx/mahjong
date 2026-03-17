@@ -14,7 +14,8 @@ export type ClientMessage =
   | { type: 'tsumo' }
   | { type: 'riichi'; tile: Tile }
   | { type: 'ron' }
-  | { type: 'skip_call' };
+  | { type: 'skip_call' }
+  | { type: 'spectate_room'; roomId: string; playerName: string };
 
 // === Server -> Client ===
 
@@ -38,4 +39,5 @@ export type ServerMessage =
   | { type: 'round_end'; reason: string }
   | { type: 'game_end'; finalScores: { name: string; score: number }[] }
   | { type: 'message'; text: string }
+  | { type: 'spectating'; roomId: string }
   | { type: 'error'; message: string };

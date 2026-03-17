@@ -65,6 +65,8 @@ function MultiplayerApp({ onBack }: { onBack: () => void }) {
         onJoinRoom={mp.joinRoom}
         onStartGame={mp.startGame}
         onLeaveRoom={mp.roomId ? mp.leaveRoom : onBack}
+        onSpectate={mp.spectate}
+        isSpectator={mp.isSpectator}
       />
     );
   }

@@ -12,6 +12,8 @@ interface LobbyProps {
   onJoinRoom: (roomId: string, name: string) => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
+  onSpectate?: (roomId: string, name: string) => void;
+  isSpectator?: boolean;
 }
 
 export function Lobby({
@@ -24,10 +26,12 @@ export function Lobby({
   onJoinRoom,
   onStartGame,
   onLeaveRoom,
+  onSpectate,
+  isSpectator,
 }: LobbyProps) {
   const [playerName, setPlayerName] = useState('');
   const [joinRoomId, setJoinRoomId] = useState('');
-  const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [mode, setMode] = useState<'menu' | 'create' | 'join' | 'spectate'>('menu');
   const [gameMode, setGameMode] = useState<'hanchan' | 'tonpuu'>('hanchan');
 
   if (!connected) {
@@ -130,6 +134,14 @@ export function Lobby({
           >
             ルームに参加
           </button>
+          {onSpectate && (
+            <button
+              onClick={() => setMode('spectate')}
+              className="px-8 py-3 bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold rounded-xl transition"
+            >
+              観戦する
+            </button>
+          )}
         </div>
 
         {error && <p className="text-red-400">{error}</p>}
@@ -141,7 +153,7 @@ export function Lobby({
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-6">
       <h1 className="text-4xl font-bold text-amber-300">
-        {mode === 'create' ? 'ルームを作成' : 'ルームに参加'}
+        {mode === 'create' ? 'ルームを作成' : mode === 'spectate' ? '観戦する' : 'ルームに参加'}
       </h1>
 
       <div className="flex flex-col gap-4 w-full max-w-xs">
@@ -179,7 +191,7 @@ export function Lobby({
           </div>
         )}
 
-        {mode === 'join' && (
+        {(mode === 'join' || mode === 'spectate') && (
           <input
             type="text"
             placeholder="ルームID"
@@ -195,15 +207,18 @@ export function Lobby({
             if (!playerName.trim()) return;
             if (mode === 'create') {
               onCreateRoom(playerName.trim(), gameMode);
+            } else if (mode === 'spectate') {
+              if (!joinRoomId.trim()) return;
+              onSpectate?.(joinRoomId.trim(), playerName.trim());
             } else {
               if (!joinRoomId.trim()) return;
               onJoinRoom(joinRoomId.trim(), playerName.trim());
             }
           }}
-          disabled={!playerName.trim() || (mode === 'join' && !joinRoomId.trim())}
+          disabled={!playerName.trim() || ((mode === 'join' || mode === 'spectate') && !joinRoomId.trim())}
           className="px-8 py-4 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-green-950 text-lg font-bold rounded-xl transition"
         >
-          {mode === 'create' ? '作成' : '参加'}
+          {mode === 'create' ? '作成' : mode === 'spectate' ? '観戦開始' : '参加'}
         </button>
 
         <button
