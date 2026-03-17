@@ -12,6 +12,7 @@ export type GameMode = 'tonpuu' | 'hanchan';
 export interface Room {
   id: string;
   players: PlayerInfo[];
+  spectators: { ws: WebSocket; name: string }[];
   hostWs: WebSocket;
   status: 'waiting' | 'playing' | 'finished';
   gameMode: GameMode;
@@ -41,6 +42,7 @@ export function createRoom(ws: WebSocket, playerName: string, gameMode: GameMode
     players: [
       { name: playerName, seat: 0, isHuman: true, ws },
     ],
+    spectators: [],
     hostWs: ws,
     status: 'waiting',
     gameMode,
@@ -110,6 +112,23 @@ export function removePlayer(ws: WebSocket): void {
   }
 }
 
+export function spectateRoom(ws: WebSocket, roomId: string, name: string): { error?: string } {
+  const room = rooms.get(roomId);
+  if (!room) return { error: 'ルームが見つかりません' };
+  room.spectators.push({ ws, name });
+  socketToRoom.set(ws, roomId);
+  return {};
+}
+
+export function removeSpectator(ws: WebSocket): void {
+  const roomId = socketToRoom.get(ws);
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room) return;
+  room.spectators = room.spectators.filter(s => s.ws !== ws);
+  socketToRoom.delete(ws);
+}
+
 export function startGame(roomId: string): Room | undefined {
   const room = rooms.get(roomId);
   if (!room) return undefined;
@@ -142,10 +161,18 @@ export function getHumanSockets(room: Room): WebSocket[] {
     .map(p => p.ws!);
 }
 
-export function broadcastToRoom(room: Room, messageFn: (seat: number) => string): void {
+export function broadcastToRoom(room: Room, messageFn: (seat: number) => string, spectatorMsg?: string): void {
   for (const player of room.players) {
     if (player.ws && player.ws.readyState === 1) {
       player.ws.send(messageFn(player.seat));
+    }
+  }
+  // 観戦者にも送信
+  if (spectatorMsg) {
+    for (const spec of room.spectators) {
+      if (spec.ws.readyState === 1) {
+        spec.ws.send(spectatorMsg);
+      }
     }
   }
 }
