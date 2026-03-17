@@ -710,12 +710,24 @@ let do_kakan seat kind suit number : string =
     | Error _ -> json_null
 
 (** CPU AI の行動を決定 *)
+let ai_difficulty_ref : Ai.difficulty ref = ref Ai.Normal
+
+let set_ai_difficulty level =
+  ai_difficulty_ref := match level with
+    | "easy" -> Ai.Easy
+    | "hard" -> Ai.Hard
+    | _ -> Ai.Normal
+
 let ai_decide seat : string =
   match !game_ref with
   | None -> json_null
   | Some game ->
     let player = game.players.(seat) in
-    match Ai.decide player game.bakaze with
+    let other_kawas = Array.to_list (Array.mapi (fun i (p : Player.t) ->
+      if i = seat then [] else List.rev p.kawa
+    ) game.players) in
+    let riichi_players = Array.to_list (Array.map (fun (p : Player.t) -> p.is_riichi) game.players) in
+    match Ai.decide ~difficulty:!ai_difficulty_ref ~other_kawas ~riichi_players player game.bakaze with
     | Ai.TsumoAgari -> json_obj [("action", json_str "tsumo")]
     | Ai.Discard tile ->
       json_obj [("action", json_str "discard"); ("tile", tile_to_json tile)]
