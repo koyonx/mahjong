@@ -20,6 +20,8 @@ import { AgariDialog } from './AgariDialog';
 import { ScoreTransition } from './ScoreTransition';
 import { AssistSettings, loadAssistConfig, type AssistConfig } from './AssistSettings';
 import { AssistDisplay } from './AssistDisplay';
+import { SoundSettings } from './SoundSettings';
+import { useSound } from '../hooks/useSound';
 import { TileView } from './TileView';
 
 const HUMAN_SEAT = 0;
@@ -40,6 +42,8 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [chiSelectMode, setChiSelectMode] = useState(false);
   const [assistConfig, setAssistConfig] = useState<AssistConfig>(loadAssistConfig());
   const [showAssistSettings, setShowAssistSettings] = useState(false);
+  const [showSoundSettings, setShowSoundSettings] = useState(false);
+  const { playTsumo: playTsumoSound, playRon: playRonSound } = useSound();
   const [scoreTransition, setScoreTransition] = useState<{
     before: { jikaze: string; score: number }[];
     after: { jikaze: string; score: number }[];
@@ -117,6 +121,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
       if (i === HUMAN_SEAT) continue; // 人間は後で選択させる
       const ronResult = checkRon(i);
       if (ronResult) {
+        playRonSound();
         setState(ronResult.state);
         setAgariResult(ronResult);
         setAgariWinner(`${kazeToJa(currentState.players[i].jikaze)}家`);
@@ -263,6 +268,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
         if (aiAction.action === 'tsumo') {
           const tsumoResult = checkTsumoAgari();
           if (tsumoResult) {
+            playTsumoSound();
             setState(tsumoResult.state);
             setAgariResult(tsumoResult);
             setAgariWinner(`${kazeToJa(drawnState.players[drawnState.current_turn].jikaze)}家`);
@@ -384,13 +390,14 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const handleRon = useCallback(() => {
     const ronResult = checkRon(HUMAN_SEAT);
     if (ronResult) {
+      playRonSound();
       setState(ronResult.state);
       setAgariResult(ronResult);
       setAgariWinner(`${kazeToJa(state!.players[HUMAN_SEAT].jikaze)}家（あなた）`);
       setLastAgariWasDealerWin(state!.players[HUMAN_SEAT].jikaze === 'ton');
       setCallInfo(null);
     }
-  }, [state]);
+  }, [state, playRonSound]);
 
   const handleSkipCall = useCallback(() => {
     setCallInfo(null);
@@ -408,12 +415,13 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const handleTsumo = useCallback(() => {
     const result = checkTsumoAgari();
     if (result) {
+      playTsumoSound();
       setState(result.state);
       setAgariResult(result);
       setAgariWinner(`${kazeToJa(state!.players[HUMAN_SEAT].jikaze)}家（あなた）`);
       setLastAgariWasDealerWin(state!.players[HUMAN_SEAT].jikaze === 'ton');
     }
-  }, [state]);
+  }, [state, playTsumoSound]);
 
   if (!state) {
     return (
@@ -473,6 +481,16 @@ export function GameBoard({ onBack }: GameBoardProps) {
       }}>補助</button>
       {showAssistSettings && (
         <AssistSettings config={assistConfig} onChange={setAssistConfig} onClose={() => setShowAssistSettings(false)} />
+      )}
+
+      {/* サウンド設定ボタン */}
+      <button onClick={() => setShowSoundSettings(!showSoundSettings)} style={{
+        position: 'absolute', top: 8, left: 120, zIndex: 30,
+        padding: '4px 8px', background: 'rgba(0,0,0,0.4)', border: '1px solid #555',
+        borderRadius: 4, color: '#aaa', fontSize: 11, cursor: 'pointer',
+      }}>音</button>
+      {showSoundSettings && (
+        <SoundSettings onClose={() => setShowSoundSettings(false)} />
       )}
 
       {message && (
