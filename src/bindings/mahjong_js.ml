@@ -784,49 +784,54 @@ let get_danger_tiles seat : string =
       ) unique)
 
 let ai_difficulty_ref : Ai.difficulty ref = ref Ai.Normal
+let ai_level_ref : int ref = ref 5
 
 let set_ai_difficulty level =
-  ai_difficulty_ref := match level with
+  ai_difficulty_ref := (match level with
     | "easy" -> Ai.Easy
     | "hard" -> Ai.Hard
-    | _ -> Ai.Normal
+    | _ -> Ai.Normal)
 
-(** Hard AIのポン判断 *)
+let set_ai_level n =
+  ai_level_ref := (max 1 (min 10 n));
+  ai_difficulty_ref := (if n <= 3 then Ai.Easy else if n <= 6 then Ai.Normal else Ai.Hard)
+
+(** AIのポン判断（レベル対応） *)
 let ai_should_pon seat : bool =
   match !game_ref with
   | None -> false
   | Some game ->
-    if !ai_difficulty_ref <> Ai.Hard then false
-    else
-      match game.last_discard with
-      | None -> false
-      | Some tile ->
-        let player = game.players.(seat) in
-        Ai.should_pon player tile game.bakaze
+    let level = !ai_level_ref in
+    match game.last_discard with
+    | None -> false
+    | Some tile ->
+      let player = game.players.(seat) in
+      Ai.should_pon_leveled ~level player tile game.bakaze
 
-(** Hard AIのチー判断 *)
+(** AIのチー判断（レベル対応） *)
 let ai_should_chi seat t1_kind t1_suit t1_num t2_kind t2_suit t2_num : bool =
   match !game_ref with
   | None -> false
   | Some game ->
-    if !ai_difficulty_ref <> Ai.Hard then false
-    else
-      let player = game.players.(seat) in
-      let t1 = tile_of_kind_suit_number t1_kind t1_suit t1_num in
-      let t2 = tile_of_kind_suit_number t2_kind t2_suit t2_num in
-      Ai.should_chi player t1 t2
+    let level = !ai_level_ref in
+    let player = game.players.(seat) in
+    let t1 = tile_of_kind_suit_number t1_kind t1_suit t1_num in
+    let t2 = tile_of_kind_suit_number t2_kind t2_suit t2_num in
+    Ai.should_chi_leveled ~level player t1 t2
 
 let ai_decide seat : string =
   match !game_ref with
   | None -> json_null
   | Some game ->
     let player = game.players.(seat) in
+    let level = !ai_level_ref in
     let other_kawas = Array.to_list (Array.mapi (fun i (p : Player.t) ->
       if i = seat then [] else List.rev p.kawa
     ) game.players) in
     let riichi_players = Array.to_list (Array.map (fun (p : Player.t) -> p.is_riichi) game.players) in
     let remaining = Wall.remaining game.wall in
-    match Ai.decide ~difficulty:!ai_difficulty_ref ~other_kawas ~riichi_players ~remaining_tiles:remaining player game.bakaze with
+    let visible = List.concat (other_kawas @ [List.rev player.kawa]) in
+    match Ai.decide_leveled ~level ~other_kawas ~riichi_players ~remaining_tiles:remaining ~visible_tiles:visible player game.bakaze with
     | Ai.TsumoAgari -> json_obj [("action", json_str "tsumo")]
     | Ai.Discard tile ->
       json_obj [("action", json_str "discard"); ("tile", tile_to_json tile)]

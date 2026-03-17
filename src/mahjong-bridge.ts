@@ -265,6 +265,10 @@ export function setAiDifficulty(level: AiDifficulty): void {
   mahjongJs.set_ai_difficulty(level);
 }
 
+export function setAiLevel(level: number): void {
+  mahjongJs.set_ai_level(level);
+}
+
 export interface AiAction {
   action: 'tsumo' | 'discard' | 'riichi';
   tile?: Tile;
