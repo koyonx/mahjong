@@ -22,6 +22,7 @@ import { AssistSettings, loadAssistConfig, type AssistConfig } from './AssistSet
 import { AssistDisplay } from './AssistDisplay';
 import { SoundSettings } from './SoundSettings';
 import { useSound } from '../hooks/useSound';
+import { saveMatch } from '../hooks/useMatchHistory';
 import { TileView } from './TileView';
 
 const HUMAN_SEAT = 0;
@@ -203,6 +204,15 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setState(next);
     if (next.phase === 'game_end') {
       setMessage('ゲーム終了');
+      // 対局結果を保存
+      const sorted = [...next.players].sort((a, b) => b.score - a.score);
+      saveMatch({
+        id: Date.now().toString(),
+        date: new Date().toLocaleString('ja-JP'),
+        mode: 'single',
+        players: next.players.map(p => ({ name: `${p.jikaze}家`, score: p.score, jikaze: p.jikaze })),
+        winner: `${sorted[0].jikaze}家`,
+      });
       return;
     }
     setMessage('次の局を開始します');
