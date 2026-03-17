@@ -4,12 +4,16 @@ export interface AssistConfig {
   showWaitCounts: boolean;
   showShanten: boolean;
   showDangerTiles: boolean;
+  showAnalysis: boolean;
+  showWinRate: boolean;
 }
 
 const DEFAULT_CONFIG: AssistConfig = {
   showWaitCounts: true,
   showShanten: false,
   showDangerTiles: false,
+  showAnalysis: false,
+  showWinRate: false,
 };
 
 const STORAGE_KEY = 'mahjong_assist_config';
@@ -51,6 +55,8 @@ export function AssistSettings({ config, onChange, onClose }: AssistSettingsProp
         { key: 'showWaitCounts' as const, label: '待ち牌の残り枚数' },
         { key: 'showShanten' as const, label: '向聴数' },
         { key: 'showDangerTiles' as const, label: '危険牌警告' },
+        { key: 'showAnalysis' as const, label: '手牌分析（方向性・推奨打牌）' },
+        { key: 'showWinRate' as const, label: '勝率推定（MC法）' },
       ]).map(item => (
         <label key={item.key} style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',

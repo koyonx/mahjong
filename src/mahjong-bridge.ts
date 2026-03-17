@@ -233,6 +233,83 @@ export function doKakan(seat: number, tile: Tile): GameState | null {
   return parse<GameState>(mahjongJs.do_kakan(seat, tile.kind, tile.suit, tile.number));
 }
 
+// === 符の詳細 ===
+
+export interface FuBreakdown {
+  base_fu: number;
+  mentsu: { type: string; tile: string; fu: number }[];
+  jantai_fu: number;
+  wait_type: string;
+  wait_type_ja: string;
+  wait_fu: number;
+  tsumo_fu: number;
+  total_fu: number;
+  rounded_fu: number;
+}
+
+export function getFuBreakdown(seat: number): FuBreakdown | null {
+  return parse<FuBreakdown>(mahjongJs.get_fu_breakdown(seat));
+}
+
+// === 手牌分析 ===
+
+export interface HandAnalysis {
+  shanten: number;
+  is_tenpai: boolean;
+  direction: string;
+  action: string;
+  discards: {
+    tile: Tile;
+    shanten: number;
+    acceptance: number;
+    waits: Tile[];
+    han: number;
+    reason: string;
+  }[];
+}
+
+const directionNames: Record<string, string> = {
+  chinitsu: '清一色', honitsu: '混一色', tanyao: '断么九',
+  toitoi: '対々和', yakuhai: '役牌', chiitoitsu: '七対子', general: '一般手',
+};
+
+const actionNames: Record<string, string> = {
+  riichi_or_damaten: 'リーチ/ダマテン判断',
+  wait_for_agari: '和了待ち',
+  push_for_tenpai: 'テンパイ目指す',
+  balanced_offense_defense: '攻守バランス',
+  consider_defense: '守備検討',
+  build_hand: '手作り',
+  full_defense: '全力守備',
+  early_game_build: '序盤の手作り',
+};
+
+export function getHandAnalysis(seat: number): HandAnalysis | null {
+  return parse<HandAnalysis>(mahjongJs.get_hand_analysis(seat));
+}
+
+export function directionName(id: string): string { return directionNames[id] ?? id; }
+export function actionName(id: string): string { return actionNames[id] ?? id; }
+
+// === 勝率推定 ===
+
+export interface WinProbability {
+  trials: number;
+  win_rate: string;
+  avg_score: string;
+  tenpai_rate: string;
+}
+
+export function getWinProbability(seat: number, trials: number = 100): WinProbability | null {
+  return parse<WinProbability>(mahjongJs.get_win_probability(seat, trials));
+}
+
+// === 牌譜 ===
+
+export function getHandShortNotation(seat: number): string {
+  try { return JSON.parse(mahjongJs.hand_to_hafu_short(seat)); } catch { return ''; }
+}
+
 // === ゲームプレイ補助 ===
 
 export interface WaitCount {
