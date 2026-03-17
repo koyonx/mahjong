@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { initMahjong } from './mahjong-bridge';
+import { initMahjong, setAiDifficulty, type AiDifficulty } from './mahjong-bridge';
 import { GameBoard } from './components/GameBoard';
 import { Lobby } from './components/Lobby';
 import { MultiplayerGameBoard } from './components/MultiplayerGameBoard';
@@ -87,6 +87,13 @@ function MultiplayerApp({ onBack }: { onBack: () => void }) {
 
 function App() {
   const [mode, setMode] = useState<Mode>('menu');
+  const [difficulty, setDifficulty] = useState<AiDifficulty>('normal');
+
+  const startSingle = (diff: AiDifficulty) => {
+    setDifficulty(diff);
+    setAiDifficulty(diff);
+    setMode('single');
+  };
 
   if (mode === 'single') return <SinglePlayerApp onBack={() => setMode('menu')} />;
   if (mode === 'multi') return <MultiplayerApp onBack={() => setMode('menu')} />;
@@ -98,12 +105,32 @@ function App() {
       <p className="text-green-300">日本式リーチ麻雀</p>
 
       <div className="flex flex-col gap-4 w-full max-w-xs">
-        <button
-          onClick={() => setMode('single')}
-          className="px-8 py-4 bg-yellow-500 hover:bg-yellow-400 text-green-950 text-lg font-bold rounded-xl transition shadow-lg"
-        >
-          一人プレイ（CPU対戦）
-        </button>
+        {/* 難易度選択付きCPU対戦 */}
+        <div style={{
+          background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16,
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          <p style={{ textAlign: 'center', color: '#e8c44a', fontWeight: 700, fontSize: 15 }}>一人プレイ（CPU対戦）</p>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {([
+              { key: 'easy' as AiDifficulty, label: '初級', color: '#4ade80', desc: 'ランダム寄り' },
+              { key: 'normal' as AiDifficulty, label: '中級', color: '#e8c44a', desc: '牌効率重視' },
+              { key: 'hard' as AiDifficulty, label: '上級', color: '#f87171', desc: '攻守バランス' },
+            ]).map(d => (
+              <button key={d.key} onClick={() => startSingle(d.key)} style={{
+                flex: 1, padding: '10px 4px', border: 'none', borderRadius: 8, cursor: 'pointer',
+                background: `${d.color}22`, color: d.color, fontWeight: 700, fontSize: 14,
+                transition: 'background 0.2s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = `${d.color}44`)}
+              onMouseLeave={e => (e.currentTarget.style.background = `${d.color}22`)}
+              >
+                <div>{d.label}</div>
+                <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.7, marginTop: 2 }}>{d.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
         <button
           onClick={() => setMode('multi')}
           className="px-8 py-4 bg-green-700 hover:bg-green-600 text-white text-lg font-bold rounded-xl transition shadow-lg"
