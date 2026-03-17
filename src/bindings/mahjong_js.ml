@@ -709,6 +709,80 @@ let do_kakan seat kind suit number : string =
       game_state_to_json new_game
     | Error _ -> json_null
 
+(** === ゲームプレイ補助 === *)
+
+let get_wait_counts seat : string =
+  match !game_ref with
+  | None -> json_arr []
+  | Some game ->
+    let player = game.players.(seat) in
+    let tiles = player.hand.tiles in
+    let furo_count = List.length player.furo_list in
+    let expected = (4 - furo_count) * 3 + 1 in
+    let hand_13 =
+      if List.length tiles = expected + 1 then
+        match player.hand.tsumo with
+        | Some t -> (match Mentsu.remove_one t tiles with Some r -> r | None -> tiles)
+        | None -> tiles
+      else if List.length tiles = expected then tiles
+      else []
+    in
+    if hand_13 = [] then json_arr []
+    else
+      let waits = Hand.tenpai_tiles (Hand.make hand_13) in
+      let visible_tiles = ref [] in
+      Array.iter (fun (p : Player.t) ->
+        visible_tiles := List.rev_append p.kawa !visible_tiles
+      ) game.players;
+      Array.iter (fun (p : Player.t) ->
+        List.iter (fun f ->
+          match f with
+          | Player.Chi (t1, t2, t3) -> visible_tiles := t1 :: t2 :: t3 :: !visible_tiles
+          | Player.Pon t -> visible_tiles := t :: t :: t :: !visible_tiles
+          | Player.Minkan t | Player.Ankan t -> visible_tiles := t :: t :: t :: t :: !visible_tiles
+        ) p.furo_list
+      ) game.players;
+      visible_tiles := List.rev_append tiles !visible_tiles;
+      let count_visible tile =
+        List.length (List.filter (fun t -> Tile.compare t tile = 0) !visible_tiles)
+      in
+      json_arr (List.map (fun w ->
+        json_obj [("tile", tile_to_json w); ("remaining", json_int (max 0 (4 - count_visible w)))]
+      ) waits)
+
+let get_shanten seat : int =
+  match !game_ref with
+  | None -> -1
+  | Some game ->
+    let player = game.players.(seat) in
+    Ai.estimate_shanten player.hand.tiles (List.length player.furo_list)
+
+let get_danger_tiles seat : string =
+  match !game_ref with
+  | None -> json_arr []
+  | Some game ->
+    let player = game.players.(seat) in
+    let tiles = player.hand.tiles in
+    let riichi_exists = Array.exists (fun (p : Player.t) -> p.is_riichi) game.players in
+    if not riichi_exists then json_arr []
+    else
+      let other_kawas = ref [] in
+      Array.iteri (fun i (p : Player.t) ->
+        if i <> seat then other_kawas := List.rev_append p.kawa !other_kawas
+      ) game.players;
+      let is_safe t = List.exists (fun k -> Tile.compare k t = 0) !other_kawas in
+      let unique = Ai.unique_tiles tiles in
+      json_arr (List.filter_map (fun t ->
+        if is_safe t then None
+        else
+          let danger_level = match t with
+            | Tile.Suhai (_, n) when n >= 3 && n <= 7 -> "high"
+            | Tile.Suhai (_, n) when n = 2 || n = 8 -> "medium"
+            | _ -> "low"
+          in
+          Some (json_obj [("tile", tile_to_json t); ("level", json_str danger_level)])
+      ) unique)
+
 let ai_difficulty_ref : Ai.difficulty ref = ref Ai.Normal
 
 let set_ai_difficulty level =

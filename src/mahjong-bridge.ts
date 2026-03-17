@@ -233,6 +233,30 @@ export function doKakan(seat: number, tile: Tile): GameState | null {
   return parse<GameState>(mahjongJs.do_kakan(seat, tile.kind, tile.suit, tile.number));
 }
 
+// === ゲームプレイ補助 ===
+
+export interface WaitCount {
+  tile: Tile;
+  remaining: number;
+}
+
+export interface DangerTile {
+  tile: Tile;
+  level: 'high' | 'medium' | 'low';
+}
+
+export function getWaitCounts(seat: number): WaitCount[] {
+  try { return JSON.parse(mahjongJs.get_wait_counts(seat)) as WaitCount[]; } catch { return []; }
+}
+
+export function getShanten(seat: number): number {
+  return mahjongJs.get_shanten(seat);
+}
+
+export function getDangerTiles(seat: number): DangerTile[] {
+  try { return JSON.parse(mahjongJs.get_danger_tiles(seat)) as DangerTile[]; } catch { return []; }
+}
+
 // === AI ===
 
 export type AiDifficulty = 'easy' | 'normal' | 'hard';
