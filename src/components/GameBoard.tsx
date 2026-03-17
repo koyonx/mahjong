@@ -23,6 +23,7 @@ import { AssistDisplay } from './AssistDisplay';
 import { SoundSettings } from './SoundSettings';
 import { useSound } from '../hooks/useSound';
 import { saveMatch } from '../hooks/useMatchHistory';
+import { useReplayRecorder, saveReplay } from '../hooks/useReplay';
 import { TileView } from './TileView';
 
 const HUMAN_SEAT = 0;
@@ -45,6 +46,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const [showAssistSettings, setShowAssistSettings] = useState(false);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
   const { playTsumo: playTsumoSound, playRon: playRonSound } = useSound();
+  const { record: recordAction, getReplayData, reset: resetReplay } = useReplayRecorder();
   const [scoreTransition, setScoreTransition] = useState<{
     before: { jikaze: string; score: number }[];
     after: { jikaze: string; score: number }[];
@@ -101,6 +103,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
 
     const newState = discardTile(tile);
     if (!newState) return;
+    recordAction({ type: 'discard', seat: HUMAN_SEAT, tile });
     setState(newState);
     setSelectedTile(null);
     setTenpaiTiles([]);
@@ -204,7 +207,8 @@ export function GameBoard({ onBack }: GameBoardProps) {
     setState(next);
     if (next.phase === 'game_end') {
       setMessage('ゲーム終了');
-      // 対局結果を保存
+      // リプレイ・対局結果を保存
+      saveReplay(getReplayData());
       const sorted = [...next.players].sort((a, b) => b.score - a.score);
       saveMatch({
         id: Date.now().toString(),
@@ -400,6 +404,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const handleRon = useCallback(() => {
     const ronResult = checkRon(HUMAN_SEAT);
     if (ronResult) {
+      recordAction({ type: 'ron_agari', seat: HUMAN_SEAT });
       playRonSound();
       setState(ronResult.state);
       setAgariResult(ronResult);
@@ -425,6 +430,7 @@ export function GameBoard({ onBack }: GameBoardProps) {
   const handleTsumo = useCallback(() => {
     const result = checkTsumoAgari();
     if (result) {
+      recordAction({ type: 'tsumo_agari', seat: HUMAN_SEAT });
       playTsumoSound();
       setState(result.state);
       setAgariResult(result);
