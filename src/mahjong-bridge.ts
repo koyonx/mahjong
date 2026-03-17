@@ -246,6 +246,14 @@ export interface AiAction {
   tile?: Tile;
 }
 
+export function aiShouldPon(seat: number): boolean {
+  return mahjongJs.ai_should_pon(seat);
+}
+
+export function aiShouldChi(seat: number, t1: Tile, t2: Tile): boolean {
+  return mahjongJs.ai_should_chi(seat, t1.kind, t1.suit, t1.number, t2.kind, t2.suit, t2.number);
+}
+
 export function aiDecide(seat: number): AiAction | null {
   return parse<AiAction>(mahjongJs.ai_decide(seat));
 }
