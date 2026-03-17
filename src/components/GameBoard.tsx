@@ -1,4 +1,4 @@
-1import { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import type { Tile, GameState, AgariResult } from '../mahjong-bridge';
 import {
   startGame, drawTile, discardTile, advanceTurn,
